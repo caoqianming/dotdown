@@ -132,8 +132,14 @@ interface PersistedTab {
 从**渲染后的预览** DOM 中提取 `h1`–`h6`（而非另行解析 Markdown，保证与预览一致），
 给每个标题分配 `id` 并生成可点击项，点击 `scrollIntoView` 平滑跳转。按标题层级缩进。
 工具栏按钮或 Ctrl+\ 开关，状态存于 `localStorage`（key `dotdown.outline`）。
+**默认展开**：无记录时默认开，仅当用户上次显式关闭（`"0"`）才保持收起。
 
 注意：视图模式切换用 `classList` 增删 `mode-*`，避免覆盖 `outline-open` 类。
+
+**WebView2 局部不重绘修复**：Windows WebView2 偶发预览渲染后局部空白（尤其下半部分），
+拖动/缩放窗口才刷新。`forceRepaint()` 在同一 JS 任务内切一次预览 `display` 触发同步
+重排+重绘（中间态不被绘制故无闪烁，并保留滚动位置），于 `renderPreview` / `setMode` /
+`setOutline` 后调用。
 
 ### 4.7 滚动同步
 

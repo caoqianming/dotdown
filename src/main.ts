@@ -278,6 +278,20 @@ function refreshActiveDirty() {
 function renderPreview() {
   previewEl.innerHTML = md.render(editor.state.doc.toString());
   buildOutline();
+  forceRepaint();
+}
+
+/**
+ * 修复 WebView2 偶发的局部不重绘：预览（尤其下半部分）有时渲染后仍空白，
+ * 拖动/缩放窗口才刷新。在同一个 JS 任务内切一次 display 触发同步重排+重绘，
+ * 中间态不会被绘制（无闪烁），并保留滚动位置。
+ */
+function forceRepaint() {
+  const top = previewPane.scrollTop;
+  previewEl.style.display = "none";
+  void previewEl.offsetHeight; // 触发同步重排
+  previewEl.style.display = "";
+  previewPane.scrollTop = top;
 }
 
 // ---------- 标题栏 ----------
@@ -430,6 +444,7 @@ function setMode(mode: ViewMode) {
   } catch {
     /* ignore */
   }
+  forceRepaint();
 }
 
 // ---------- 大纲侧栏 ----------
@@ -467,6 +482,7 @@ function setOutline(open: boolean) {
   } catch {
     /* ignore */
   }
+  forceRepaint();
 }
 
 function toggleOutline() {
@@ -717,9 +733,10 @@ window.addEventListener("beforeunload", (e) => {
 async function init() {
   applyTheme();
   try {
-    setOutline(localStorage.getItem(OUTLINE_KEY) === "1");
+    // 默认展开大纲；仅当用户上次显式关闭（"0"）才保持收起
+    setOutline(localStorage.getItem(OUTLINE_KEY) !== "0");
   } catch {
-    /* ignore */
+    setOutline(true);
   }
   try {
     // 默认预览模式；记住上次选择
