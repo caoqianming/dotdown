@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mdview</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <div id="app" class="mode-split">
+      <header class="toolbar">
+        <div class="group">
+          <button id="btn-new" title="新建 (Ctrl+N)">新建</button>
+          <button id="btn-open" title="打开 (Ctrl+O)">打开</button>
+          <button id="btn-save" title="保存 (Ctrl+S)">保存</button>
+          <button id="btn-saveas" title="另存为 (Ctrl+Shift+S)">另存为</button>
+        </div>
+        <div class="title" id="doc-title">未命名</div>
+        <div class="group view-modes">
+          <button id="mode-editor" data-mode="editor" title="仅编辑">编辑</button>
+          <button id="mode-split" data-mode="split" class="active" title="分栏">分栏</button>
+          <button id="mode-preview" data-mode="preview" title="仅预览">预览</button>
+        </div>
+      </header>
+      <main class="panes">
+        <section class="pane pane-editor"><div id="editor"></div></section>
+        <div class="divider"></div>
+        <section class="pane pane-preview">
+          <article id="preview" class="markdown-body"></article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+[package]
+name = "mdview"
+version = "0.1.0"
+description = "Markdown 预览/编辑小工具"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# 仅桌面端：去掉 staticlib/cdylib，避免 GNU 链接器导出符号上限报错
+# （cdylib 仅移动端构建需要）。
+name = "mdview_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
