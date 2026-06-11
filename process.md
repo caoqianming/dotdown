@@ -8,11 +8,18 @@
 - [x] **M2 核心编辑/预览**：CodeMirror 编辑 + markdown-it 预览、文件读写、视图切换、滚动同步
 - [x] **M3 多标签页**：多文档并行、标签栏、切换/关闭/去重
 - [x] **M4 体验增强**：会话恢复 ✅ / 深色模式 ✅ / 大纲侧栏 ✅
-- [ ] **M5 发布**：图标/产品信息、`tauri build` 打包
+- [x] **M5 发布**：`tauri build` 打包 + GitHub Release v0.1.0（含 exe/msi/setup）
 
 ---
 
 ## 2026-06-11
+
+### 已完成：M5 发布
+- `npm run tauri build` 生成 release 产物：`mdview.exe`、`mdview_0.1.0_x64_en-US.msi`、
+  `mdview_0.1.0_x64-setup.exe`。
+- 源码推送到 GitHub（`caoqianming/mdview`，HTTPS）。
+- 经 REST API 创建 Release `v0.1.0`，上传 exe / msi / setup 三个资产。
+- 新增「关于/帮助」弹窗、面向 GitHub 的 README、MIT LICENSE。
 
 ### 已完成：扁平化图标 + 大纲侧栏
 - **图标**：新增 `app-icon.svg`（扁平蓝底圆角方 + 白色 Markdown 标志），`tauri icon`
