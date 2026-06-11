@@ -77,8 +77,10 @@ interface Tab {
 好处：撤销历史、光标、选区**按标签隔离**，且只挂一个 DOM 编辑器，省内存、滚动
 同步逻辑只需绑定一次。
 
-**dirty 判定**：`docOf(tab) !== tab.lastSaved`。激活标签的实时内容取自
-`editor.state`（`tab.state` 可能滞后），非激活标签取 `tab.state`。
+**dirty 判定**：比较前先用 `eol()` 把两边换行符规范化为 LF（CodeMirror 会把文档规范化为
+LF，否则打开 CRLF 文件会被误判为已编辑），即 `eol(docOf(tab)) !== eol(tab.lastSaved)`。
+激活标签的实时内容取自 `editor.state`（`tab.state` 可能滞后），非激活标签取 `tab.state`。
+关掉最后一个标签后留一个空白未命名（不重现欢迎文档）。
 
 **打开去重**：打开已在某标签中的文件时，直接切换到该标签，不重复打开。
 
@@ -87,7 +89,8 @@ interface Tab {
 ### 4.3 视图模式
 
 `#app` 的 class 在 `mode-editor` / `mode-split` / `mode-preview` 间切换，用 CSS
-控制左右面板显隐，无需 JS 重排。
+控制左右面板显隐，无需 JS 重排。默认 **预览** 模式，并记住上次选择（`localStorage`
+key `dotdown.mode`）。
 
 ### 4.4 会话恢复
 

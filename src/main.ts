@@ -206,8 +206,13 @@ function docOf(t: Tab): string {
   return t.id === activeId ? editor.state.doc.toString() : t.state.doc.toString();
 }
 
+/** 统一换行符再比较：CodeMirror 会把文档规范化为 LF，避免 CRLF 文件被误判为已编辑。 */
+function eol(s: string): string {
+  return s.replace(/\r\n?/g, "\n");
+}
+
 function isDirty(t: Tab): boolean {
-  return docOf(t) !== t.lastSaved;
+  return eol(docOf(t)) !== eol(t.lastSaved);
 }
 
 function nameOf(t: Tab): string {
@@ -338,8 +343,9 @@ async function closeTab(id: number) {
   tabs.splice(idx, 1);
 
   if (tabs.length === 0) {
+    // 关掉最后一个标签后留一个空白未命名（而非重现欢迎文档）
     activeId = -1;
-    newTab(null, WELCOME);
+    newTab();
     return;
   }
   if (id === activeId) {
@@ -409,12 +415,20 @@ async function writeTo(t: Tab, path: string) {
 }
 
 // ---------- 视图模式 ----------
-function setMode(mode: "editor" | "split" | "preview") {
+type ViewMode = "editor" | "split" | "preview";
+const MODE_KEY = "dotdown.mode";
+
+function setMode(mode: ViewMode) {
   appEl.classList.remove("mode-editor", "mode-split", "mode-preview");
   appEl.classList.add(`mode-${mode}`);
   document
     .querySelectorAll(".view-modes button")
     .forEach((b) => b.classList.toggle("active", (b as HTMLElement).dataset.mode === mode));
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
 }
 
 // ---------- 大纲侧栏 ----------
@@ -626,6 +640,13 @@ async function init() {
     setOutline(localStorage.getItem(OUTLINE_KEY) === "1");
   } catch {
     /* ignore */
+  }
+  try {
+    // 默认预览模式；记住上次选择
+    const m = localStorage.getItem(MODE_KEY);
+    setMode(m === "editor" || m === "split" || m === "preview" ? m : "preview");
+  } catch {
+    setMode("preview");
   }
   try {
     document.getElementById("about-version")!.textContent = "v" + (await getVersion());
