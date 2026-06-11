@@ -16,6 +16,15 @@
 
 ## 2026-06-11（续）
 
+### 已发布：v0.2.2 双平台
+- 打 tag `v0.2.2` 推 GitHub + Gitee；两边各建 Release，上传 `Dotdown_0.2.2_x64-setup.exe`
+  （NSIS 2.8MB）与免安装 `dotdown.exe`（9.8MB）。
+- 两仓库补充简介描述（GitHub 经 stored credential、Gitee 经 API v5）；Gitee 描述含中文，
+  注意 `--data-urlencode` 直传命令行会被外层 shell 二次编码成乱码，**改用 `description@文件`
+  从 UTF-8 文件读取**才正确。
+- 打包踩坑：旧的 `target/` 缓存里残留更名前路径 `D:\projects\mdview\...` 导致首次
+  `tauri build` 读取插件权限失败；`cargo clean` 后全量重编通过。
+
 ### 已完成：更新检查（轻量方案，v0.2.2）
 - 关于弹窗加「检查更新」按钮 + 状态文案；启动时静默检查一次（仅有新版时弹关于窗提示）。
 - 取版本：当前 `getVersion()`，远端取发行版 `tag_name`——**优先 Gitee**
