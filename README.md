@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="app-icon.svg" width="96" alt="mdview logo" />
+<img src="app-icon.svg" width="96" alt="Dotdown logo" />
 
-# mdview
+# Dotdown
 
 轻量的 Markdown 预览 / 编辑桌面小工具，用 [Tauri 2](https://v2.tauri.app/) 打造。
 
@@ -70,13 +70,13 @@ npm run tauri build   # 生成发布版
 
 构建产物位于 `src-tauri/target/release/`：
 
-- 可执行文件：`mdview.exe`
+- 可执行文件：`Dotdown.exe`
 - 安装包：`bundle/msi/*.msi`、`bundle/nsis/*-setup.exe`
 
 ## 📁 项目结构
 
 ```
-mdview/
+dotdown/
 ├─ index.html          # 应用外壳
 ├─ src/
 │  ├─ main.ts          # 标签 / 编辑器 / 预览 / 文件 / 主题 / 大纲 / 会话

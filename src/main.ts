@@ -17,7 +17,7 @@ import taskLists from "markdown-it-task-lists";
 import hljs from "highlight.js";
 
 // 启动时的欢迎文档
-const WELCOME = `# 欢迎使用 mdview
+const WELCOME = `# 欢迎使用 Dotdown
 
 一个用 **Tauri** 打造的 Markdown 预览/编辑小工具。
 
@@ -91,7 +91,7 @@ const previewPane = document.querySelector(".pane-preview") as HTMLElement;
 
 // ---------- 主题（浅色 / 深色 / 跟随系统）----------
 type ThemeMode = "light" | "dark" | "system";
-const THEME_KEY = "mdview.theme";
+const THEME_KEY = "dotdown.theme";
 const themeCompartment = new Compartment();
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
@@ -280,7 +280,7 @@ function updateTitle() {
   const label = t ? (t.path ?? "未命名") : "未命名";
   titleEl.textContent = dot + label;
   void getCurrentWindow()
-    .setTitle(`${dot}${t ? nameOf(t) : "mdview"} — mdview`)
+    .setTitle(`${dot}${t ? nameOf(t) : "Dotdown"} — Dotdown`)
     .catch(() => {});
 }
 
@@ -417,7 +417,7 @@ function setMode(mode: "editor" | "split" | "preview") {
 
 // ---------- 大纲侧栏 ----------
 const outlineEl = document.getElementById("outline") as HTMLElement;
-const OUTLINE_KEY = "mdview.outline";
+const OUTLINE_KEY = "dotdown.outline";
 
 /** 从已渲染的预览中提取标题，生成可点击跳转的大纲。 */
 function buildOutline() {
@@ -478,7 +478,7 @@ editor.scrollDOM.addEventListener("scroll", () => {
 // 存于 WebView 的 localStorage（Tauri 数据目录持久化）。干净的已存盘文件只记录
 // 路径、重启时从磁盘重载（能反映外部改动）；有未保存改动或未命名的标签则连内容
 // 一起保存，避免丢失。
-const SESSION_KEY = "mdview.session";
+const SESSION_KEY = "dotdown.session";
 
 interface PersistedTab {
   path: string | null;

@@ -5,7 +5,7 @@
     <!-- 首屏前设定主题，避免启动闪白 -->
     <script>
       try {
-        var m = localStorage.getItem("mdview.theme") || "system";
+        var m = localStorage.getItem("dotdown.theme") || "system";
         var dark =
           m === "dark" ||
           (m === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -14,7 +14,7 @@
     </script>
     <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>mdview</title>
+    <title>Dotdown</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
 
@@ -63,15 +63,14 @@
         <div class="about-head">
           <svg class="about-logo" width="48" height="48" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
             <rect x="0" y="0" width="512" height="512" rx="112" fill="#2563eb"/>
-            <g transform="translate(76,146) scale(1.73)" stroke="#fff" stroke-width="11" fill="none" stroke-linejoin="round">
-              <rect x="5" y="5" width="198" height="118" ry="14"/>
-            </g>
-            <g transform="translate(76,146) scale(1.73)" fill="#fff">
-              <path d="M30 98V30h20l20 25 20-25h20v68H110V59L90 84 70 59v39zM155 98l-30-33h20V30h20v35h20z"/>
+            <circle cx="256" cy="130" r="34" fill="#fff"/>
+            <g fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="150,216 256,316 362,216"/>
+              <polyline points="150,306 256,406 362,306"/>
             </g>
           </svg>
           <div>
-            <h2 id="about-title" class="modal-title">mdview <span id="about-version" class="modal-version"></span></h2>
+            <h2 id="about-title" class="modal-title">Dotdown <span id="about-version" class="modal-version"></span></h2>
             <p class="modal-sub">一个用 Tauri 打造的 Markdown 预览 / 编辑小工具</p>
           </div>
         </div>

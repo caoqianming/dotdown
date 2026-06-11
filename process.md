@@ -1,6 +1,8 @@
-# mdview 进度记录
+# Dotdown 进度记录
 
 > 开发进度与变更日志。新进展追加到顶部。
+>
+> 注：项目原名 mdview，2026-06-11 更名为 **Dotdown**；下方旧记录中的 `mdview*` 为更名前内容。
 
 ## 里程碑总览
 
@@ -13,6 +15,12 @@
 ---
 
 ## 2026-06-11
+
+### 更名：mdview → Dotdown
+- 全量替换：productName / 包名 / crate 名（`dotdown_lib`）/ identifier
+  (`com.caoqi.dotdown`) / 窗口标题 / 关于弹窗 / localStorage key（`dotdown.*`）/ 文档。
+- 更新应用图标（`tauri icon` 重新生成）。
+- GitHub 仓库 `mdview` 重命名为 `dotdown`。
 
 ### 已完成：M5 发布
 - `npm run tauri build` 生成 release 产物：`mdview.exe`、`mdview_0.1.0_x64_en-US.msi`、

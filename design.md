@@ -1,4 +1,4 @@
-# mdview 设计文档
+# Dotdown 设计文档
 
 > Markdown 预览/编辑桌面小工具（自用）。本文档记录架构、数据模型与关键设计决策，随功能演进持续更新。
 
@@ -92,7 +92,7 @@ interface Tab {
 ### 4.4 会话恢复
 
 重启后自动还原上次打开的标签。持久化到 WebView 的 `localStorage`
-（key `mdview.session`，Tauri 数据目录会保留）。
+（key `dotdown.session`，Tauri 数据目录会保留）。
 
 持久化结构：
 
@@ -116,7 +116,7 @@ interface PersistedTab {
 
 ### 4.5 主题（深色模式）
 
-三态：浅色 / 深色 / 跟随系统，工具栏按钮循环切换，选择存于 `localStorage`（key `mdview.theme`）。
+三态：浅色 / 深色 / 跟随系统，工具栏按钮循环切换，选择存于 `localStorage`（key `dotdown.theme`）。
 
 - **UI 换肤**：CSS 变量 + `:root[data-theme="dark"]` 覆盖；`index.html` 头部内联
   脚本在首屏前设好 `data-theme`，避免启动闪白。
@@ -128,7 +128,7 @@ interface PersistedTab {
 
 从**渲染后的预览** DOM 中提取 `h1`–`h6`（而非另行解析 Markdown，保证与预览一致），
 给每个标题分配 `id` 并生成可点击项，点击 `scrollIntoView` 平滑跳转。按标题层级缩进。
-工具栏按钮或 Ctrl+\ 开关，状态存于 `localStorage`（key `mdview.outline`）。
+工具栏按钮或 Ctrl+\ 开关，状态存于 `localStorage`（key `dotdown.outline`）。
 
 注意：视图模式切换用 `classList` 增删 `mode-*`，避免覆盖 `outline-open` 类。
 
