@@ -227,6 +227,123 @@ body {
   padding: 8px 12px;
 }
 
+/* ---------- 关于 / 帮助 弹窗 ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.modal-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.about-logo {
+  flex: none;
+  border-radius: 11px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.4em;
+}
+
+.modal-version {
+  color: var(--muted);
+  font-size: 0.6em;
+  font-weight: 400;
+}
+
+.modal-sub {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.modal h3 {
+  margin: 18px 0 8px;
+  font-size: 0.95em;
+  color: var(--accent);
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+
+.about-list code,
+.about-keys kbd {
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.about-keys {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.about-keys td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.about-keys td:first-child {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.about-keys kbd {
+  border: 1px solid var(--border);
+}
+
 /* ---------- 面板布局 ---------- */
 .panes {
   flex: 1;

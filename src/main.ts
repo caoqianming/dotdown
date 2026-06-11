@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save, message, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
@@ -455,6 +456,17 @@ function toggleOutline() {
   setOutline(!appEl.classList.contains("outline-open"));
 }
 
+// ---------- 关于 / 帮助 弹窗 ----------
+const aboutOverlay = document.getElementById("about-overlay") as HTMLElement;
+
+function openAbout() {
+  aboutOverlay.hidden = false;
+}
+
+function closeAbout() {
+  aboutOverlay.hidden = true;
+}
+
 // ---------- 滚动同步（编辑器 -> 预览）----------
 editor.scrollDOM.addEventListener("scroll", () => {
   const se = editor.scrollDOM;
@@ -555,6 +567,14 @@ document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
 document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
 document.getElementById("btn-outline")!.addEventListener("click", toggleOutline);
+document.getElementById("btn-about")!.addEventListener("click", openAbout);
+document.getElementById("about-close")!.addEventListener("click", closeAbout);
+aboutOverlay.addEventListener("click", (e) => {
+  if (e.target === aboutOverlay) closeAbout();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !aboutOverlay.hidden) closeAbout();
+});
 document
   .querySelectorAll(".view-modes button")
   .forEach((b) =>
@@ -583,6 +603,11 @@ async function init() {
   applyTheme();
   try {
     setOutline(localStorage.getItem(OUTLINE_KEY) === "1");
+  } catch {
+    /* ignore */
+  }
+  try {
+    document.getElementById("about-version")!.textContent = "v" + (await getVersion());
   } catch {
     /* ignore */
   }
