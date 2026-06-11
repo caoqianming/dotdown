@@ -22,6 +22,11 @@
     <div id="app" class="mode-split">
       <header class="toolbar">
         <div class="group">
+          <button id="btn-outline" title="大纲 (Ctrl+\)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="group">
           <button id="btn-new" title="新建 (Ctrl+N)">新建</button>
           <button id="btn-open" title="打开 (Ctrl+O)">打开</button>
           <button id="btn-save" title="保存 (Ctrl+S)">保存</button>
@@ -39,6 +44,7 @@
       </header>
       <nav id="tabbar" class="tabbar"></nav>
       <main class="panes">
+        <aside id="outline" class="outline"></aside>
         <section class="pane pane-editor"><div id="editor"></div></section>
         <div class="divider"></div>
         <section class="pane pane-preview">

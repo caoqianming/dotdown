@@ -182,6 +182,7 @@ function makeState(doc: string): EditorState {
         { key: "Mod-n", run: () => (newTab(), true) },
         { key: "Mod-t", run: () => (newTab(), true) },
         { key: "Mod-w", run: () => (closeTab(activeId), true) },
+        { key: "Mod-\\", run: () => (toggleOutline(), true) },
       ]),
     ],
   });
@@ -267,6 +268,7 @@ function refreshActiveDirty() {
 // ---------- 预览渲染 ----------
 function renderPreview() {
   previewEl.innerHTML = md.render(editor.state.doc.toString());
+  buildOutline();
 }
 
 // ---------- 标题栏 ----------
@@ -405,10 +407,52 @@ async function writeTo(t: Tab, path: string) {
 
 // ---------- 视图模式 ----------
 function setMode(mode: "editor" | "split" | "preview") {
-  appEl.className = `mode-${mode}`;
+  appEl.classList.remove("mode-editor", "mode-split", "mode-preview");
+  appEl.classList.add(`mode-${mode}`);
   document
     .querySelectorAll(".view-modes button")
     .forEach((b) => b.classList.toggle("active", (b as HTMLElement).dataset.mode === mode));
+}
+
+// ---------- 大纲侧栏 ----------
+const outlineEl = document.getElementById("outline") as HTMLElement;
+const OUTLINE_KEY = "mdview.outline";
+
+/** 从已渲染的预览中提取标题，生成可点击跳转的大纲。 */
+function buildOutline() {
+  const heads = previewEl.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6");
+  outlineEl.innerHTML = "";
+  if (heads.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "outline-empty";
+    empty.textContent = "（无标题）";
+    outlineEl.appendChild(empty);
+    return;
+  }
+  heads.forEach((h, i) => {
+    h.id = `mdh-${i}`;
+    const level = Number(h.tagName[1]);
+    const item = document.createElement("button");
+    item.className = "outline-item";
+    item.textContent = h.textContent ?? "";
+    item.title = item.textContent;
+    item.style.paddingLeft = `${12 + (level - 1) * 14}px`;
+    item.addEventListener("click", () => h.scrollIntoView({ behavior: "smooth", block: "start" }));
+    outlineEl.appendChild(item);
+  });
+}
+
+function setOutline(open: boolean) {
+  appEl.classList.toggle("outline-open", open);
+  try {
+    localStorage.setItem(OUTLINE_KEY, open ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+function toggleOutline() {
+  setOutline(!appEl.classList.contains("outline-open"));
 }
 
 // ---------- 滚动同步（编辑器 -> 预览）----------
@@ -510,6 +554,7 @@ document.getElementById("btn-open")!.addEventListener("click", openFile);
 document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
 document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
+document.getElementById("btn-outline")!.addEventListener("click", toggleOutline);
 document
   .querySelectorAll(".view-modes button")
   .forEach((b) =>
@@ -536,6 +581,11 @@ window.addEventListener("beforeunload", (e) => {
 // ---------- 初始化 ----------
 async function init() {
   applyTheme();
+  try {
+    setOutline(localStorage.getItem(OUTLINE_KEY) === "1");
+  } catch {
+    /* ignore */
+  }
   const restored = await restoreSession();
   if (!restored) newTab(null, WELCOME);
 }

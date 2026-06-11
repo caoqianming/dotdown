@@ -167,16 +167,64 @@ body {
   color: var(--accent);
 }
 
-/* ---------- 主题切换按钮 ---------- */
-#btn-theme {
+/* ---------- 图标按钮（主题 / 大纲）---------- */
+#btn-theme,
+#btn-outline {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 4px 8px;
 }
 
-#btn-theme svg {
+#btn-theme svg,
+#btn-outline svg {
   display: block;
+}
+
+#app.outline-open #btn-outline {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- 大纲侧栏 ---------- */
+.outline {
+  flex: none;
+  width: 240px;
+  overflow: auto;
+  background: var(--bg-alt);
+  border-right: 1px solid var(--border);
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+#app:not(.outline-open) .outline {
+  display: none;
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0;
+}
+
+.outline-item:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+
+.outline-empty {
+  color: var(--muted);
+  padding: 8px 12px;
 }
 
 /* ---------- 面板布局 ---------- */

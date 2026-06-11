@@ -124,7 +124,15 @@ interface PersistedTab {
   `reconfigure` 切换；切标签时按当前主题重配，保证各标签观感一致。
 - **跟随系统**：监听 `prefers-color-scheme` 变化即时生效。
 
-### 4.6 滚动同步
+### 4.6 大纲侧栏
+
+从**渲染后的预览** DOM 中提取 `h1`–`h6`（而非另行解析 Markdown，保证与预览一致），
+给每个标题分配 `id` 并生成可点击项，点击 `scrollIntoView` 平滑跳转。按标题层级缩进。
+工具栏按钮或 Ctrl+\ 开关，状态存于 `localStorage`（key `mdview.outline`）。
+
+注意：视图模式切换用 `classList` 增删 `mode-*`，避免覆盖 `outline-open` 类。
+
+### 4.7 滚动同步
 
 编辑器 `scrollDOM` 滚动时按比例设置预览面板 `scrollTop`（编辑器 → 预览，单向）。
 绑定一次，跨标签复用同一 View 故无需重绑。
@@ -138,6 +146,7 @@ interface PersistedTab {
 | Ctrl+S | 保存 |
 | Ctrl+Shift+S | 另存为 |
 | Ctrl+W | 关闭当前标签 |
+| Ctrl+\ | 开关大纲侧栏 |
 
 ## 6. 构建与工具链注意
 
