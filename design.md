@@ -114,7 +114,17 @@ interface PersistedTab {
 保存时机：结构性操作（新建/切换/关闭/保存）后立即保存；编辑时防抖 500ms 保存；
 `beforeunload` 兜底刷新。
 
-### 4.5 滚动同步
+### 4.5 主题（深色模式）
+
+三态：浅色 / 深色 / 跟随系统，工具栏按钮循环切换，选择存于 `localStorage`（key `mdview.theme`）。
+
+- **UI 换肤**：CSS 变量 + `:root[data-theme="dark"]` 覆盖；`index.html` 头部内联
+  脚本在首屏前设好 `data-theme`，避免启动闪白。
+- **编辑器换肤**：CodeMirror 用 `Compartment` 包裹主题（深色用 `oneDark`），运行时
+  `reconfigure` 切换；切标签时按当前主题重配，保证各标签观感一致。
+- **跟随系统**：监听 `prefers-color-scheme` 变化即时生效。
+
+### 4.6 滚动同步
 
 编辑器 `scrollDOM` 滚动时按比例设置预览面板 `scrollTop`（编辑器 → 预览，单向）。
 绑定一次，跨标签复用同一 View 故无需重绑。

@@ -4,10 +4,11 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { EditorView, keymap } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Compartment } from "@codemirror/state";
 import { basicSetup } from "codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
+import { oneDark } from "@codemirror/theme-one-dark";
 
 import MarkdownIt from "markdown-it";
 // @ts-expect-error: 该插件无类型声明
@@ -87,6 +88,62 @@ const appEl = document.getElementById("app") as HTMLElement;
 const tabbarEl = document.getElementById("tabbar") as HTMLElement;
 const previewPane = document.querySelector(".pane-preview") as HTMLElement;
 
+// ---------- 主题（浅色 / 深色 / 跟随系统）----------
+type ThemeMode = "light" | "dark" | "system";
+const THEME_KEY = "mdview.theme";
+const themeCompartment = new Compartment();
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+
+let themeMode: ThemeMode = readThemeMode();
+
+function readThemeMode(): ThemeMode {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    if (v === "light" || v === "dark" || v === "system") return v;
+  } catch {
+    /* ignore */
+  }
+  return "system";
+}
+
+/** 当前生效的明暗（解析 system）。 */
+function isDark(): boolean {
+  return themeMode === "dark" || (themeMode === "system" && darkQuery.matches);
+}
+
+function editorThemeExt() {
+  return isDark() ? oneDark : [];
+}
+
+/** 应用主题：设置根节点 data-theme、重配编辑器主题、刷新按钮。 */
+function applyTheme() {
+  document.documentElement.dataset.theme = isDark() ? "dark" : "light";
+  editor.dispatch({ effects: themeCompartment.reconfigure(editorThemeExt()) });
+  const btn = document.getElementById("btn-theme");
+  if (btn) {
+    const label: Record<ThemeMode, string> = { light: "☀️", dark: "🌙", system: "🖥️" };
+    const name: Record<ThemeMode, string> = { light: "浅色", dark: "深色", system: "跟随系统" };
+    btn.textContent = label[themeMode];
+    btn.title = `主题：${name[themeMode]}（点击切换）`;
+  }
+}
+
+function cycleTheme() {
+  const order: ThemeMode[] = ["light", "dark", "system"];
+  themeMode = order[(order.indexOf(themeMode) + 1) % order.length];
+  try {
+    localStorage.setItem(THEME_KEY, themeMode);
+  } catch {
+    /* ignore */
+  }
+  applyTheme();
+}
+
+// 跟随系统时，系统明暗变化即时生效
+darkQuery.addEventListener("change", () => {
+  if (themeMode === "system") applyTheme();
+});
+
 // ---------- CodeMirror 编辑器（单 View，按标签换 State）----------
 const onChange = EditorView.updateListener.of((u) => {
   if (u.docChanged) {
@@ -103,6 +160,7 @@ function makeState(doc: string): EditorState {
     extensions: [
       basicSetup,
       markdown({ base: markdownLanguage, codeLanguages: languages }),
+      themeCompartment.of(editorThemeExt()),
       EditorView.lineWrapping,
       onChange,
       keymap.of([
@@ -223,7 +281,11 @@ function createTab(path: string | null, content: string, lastSaved: string): Tab
 function activate(id: number) {
   activeId = id;
   const t = activeTab();
-  if (t) editor.setState(t.state);
+  if (t) {
+    editor.setState(t.state);
+    // 该标签的 state 可能在不同主题下创建，换入后对齐当前主题
+    editor.dispatch({ effects: themeCompartment.reconfigure(editorThemeExt()) });
+  }
   renderTabs();
   renderPreview();
   updateTitle();
@@ -435,6 +497,7 @@ document.getElementById("btn-new")!.addEventListener("click", () => newTab());
 document.getElementById("btn-open")!.addEventListener("click", openFile);
 document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
+document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
 document
   .querySelectorAll(".view-modes button")
   .forEach((b) =>
@@ -460,6 +523,7 @@ window.addEventListener("beforeunload", (e) => {
 
 // ---------- 初始化 ----------
 async function init() {
+  applyTheme();
   const restored = await restoreSession();
   if (!restored) newTab(null, WELCOME);
 }
