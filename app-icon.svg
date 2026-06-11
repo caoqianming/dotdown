@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- 扁平圆角方背景 -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#2563eb"/>
+  <!-- 经典 Markdown 标志（白色），居中 -->
+  <g transform="translate(76,146) scale(1.73)" stroke="#ffffff" stroke-width="11" fill="none" stroke-linejoin="round">
+    <rect x="5" y="5" width="198" height="118" ry="14"/>
+  </g>
+  <g transform="translate(76,146) scale(1.73)" fill="#ffffff">
+    <path d="M30 98V30h20l20 25 20-25h20v68H110V59L90 84 70 59v39zM155 98l-30-33h20V30h20v35h20z"/>
+  </g>
+</svg>
