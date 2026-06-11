@@ -165,22 +165,23 @@ interface PersistedTab {
   转发到现有窗口 + 聚焦。前端在启动时调 `initial_file`、并 `listen("open-file")`，
   统一交给 `loadPath`（按路径去重）。
 
-### 4.11 更新检查（计划，轻量方案）
-
-> 状态：设计中，尚未实现。
+### 4.11 更新检查（轻量方案，已实现 v0.2.2）
 
 应用内「检查更新」：只**检查 + 跳转下载页**，不在应用内下载安装（后者是完整自动更新方案，
 需签名密钥与长期维护，暂不采用），因此零密钥、零额外发布产物。
 
 - **取版本**：当前版本用 `getVersion()`；远端"最新版"用发布平台 API 的 `tag_name`。
-  - GitHub：`GET https://api.github.com/repos/caoqianming/dotdown/releases/latest`。
-  - 若启用 Gitee 镜像：优先查 Gitee 发行版 API，失败回退 GitHub。
-  - 请求方式：webview `fetch` 直接请求（GitHub API 支持 CORS）；CSP 当前为 null 放行。
-- **比较**：按语义化版本比较 `tag`（去掉前缀 `v`）。有新版则弹窗显示新版本号 + 更新说明。
-- **下载**：弹窗「去下载」按钮用 `opener` 插件打开对应**发行版页面**（国内用户优先 Gitee，
-  其余 GitHub），由用户手动下载安装。
-- **入口**：关于弹窗内加「检查更新」按钮；可选启动时静默检查一次（有新版才提示）。
-- **依赖/权限**：`opener`（已有）；网络请求走 webview `fetch`，无需额外插件。
+  - 仓库坐标常量 `REPO = "caoqianming/dotdown"`。
+  - **优先 Gitee**：`GET https://gitee.com/api/v5/repos/caoqianming/dotdown/releases/latest`
+    （国内访问快）；失败回退 GitHub：`GET https://api.github.com/repos/.../releases/latest`。
+  - 请求方式：webview `fetch` 直接请求；CSP 当前为 null 放行。
+- **比较**：`compareVersion()` 按语义化版本逐段比较 `tag`（去前缀 `v`、忽略预发布标记）。
+- **下载**：有新版时在关于弹窗内显示 `发现新版本 vX · 去下载`，「去下载」用 `openUrl()`
+  （`tauri-plugin-opener`）打开对应**发行版页面**（Gitee 命中则开 Gitee，回退 GitHub）。
+- **入口**：关于弹窗内「检查更新」按钮（`checkUpdate(false)`，会反馈「检查中／已是最新／失败」）；
+  启动时静默检查一次 `checkUpdate(true)`——仅在有新版时自动弹出关于窗提示，最新/失败不打扰。
+- **依赖/权限**：`@tauri-apps/plugin-opener` 的 `openUrl`；`opener:default` 含 `allow-default-urls`
+  放行 `https://*`，无需改 capabilities；网络走 webview `fetch`，无需额外插件。
 
 > 升级到「完整自动更新」时再引入 `tauri-plugin-updater` + 签名密钥 + `latest.json` 端点
 > （端点可列 Gitee 优先、GitHub 备用）。
@@ -210,10 +211,10 @@ interface PersistedTab {
 ## 7. 后续路线（Roadmap）
 
 > 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、导出 PDF、
-> 文件关联 / 双击打开 / 右键菜单、发布打包。
+> 文件关联 / 双击打开 / 右键菜单、发布打包、更新检查（Gitee 优先）。
 
-- [ ] 更新检查（轻量方案，见 §4.11）
-- [ ] Gitee 镜像（国内用户下载提速）
+- [x] 更新检查（轻量方案，见 §4.11）
+- [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
 - [ ] 导出 HTML
 - [ ] 标签拖拽重排
 - [ ] 字数统计、查找替换

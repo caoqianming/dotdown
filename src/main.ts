@@ -4,6 +4,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
@@ -483,6 +484,84 @@ function closeAbout() {
   aboutOverlay.hidden = true;
 }
 
+// ---------- 检查更新（轻量方案：只查版本 + 跳转下载页，不在应用内下载）----------
+// 仓库坐标。国内用户优先 Gitee，失败回退 GitHub。
+const REPO = "caoqianming/dotdown";
+const GITEE_RELEASES = `https://gitee.com/${REPO}/releases`;
+const GITHUB_RELEASES = `https://github.com/${REPO}/releases`;
+
+// 语义化版本比较：a > b 返回正数。仅比较数字段，忽略前缀 v 与预发布标记。
+function compareVersion(a: string, b: string): number {
+  const norm = (s: string) =>
+    s
+      .replace(/^v/i, "")
+      .split(/[.\-+]/)
+      .map((x) => parseInt(x, 10))
+      .filter((n) => !Number.isNaN(n));
+  const pa = norm(a);
+  const pb = norm(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+// 取最新发行版：优先 Gitee，失败回退 GitHub。返回 tag、下载页与（可选）更新说明。
+async function fetchLatest(): Promise<{ tag: string; page: string; body: string } | null> {
+  // Gitee：国内访问快，作为首选
+  try {
+    const r = await fetch(`https://gitee.com/api/v5/repos/${REPO}/releases/latest`);
+    if (r.ok) {
+      const j = await r.json();
+      if (j?.tag_name) return { tag: j.tag_name, page: GITEE_RELEASES, body: j.body || "" };
+    }
+  } catch {
+    /* 回退 GitHub */
+  }
+  // GitHub 回退
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+    if (r.ok) {
+      const j = await r.json();
+      if (j?.tag_name)
+        return { tag: j.tag_name, page: j.html_url || GITHUB_RELEASES, body: j.body || "" };
+    }
+  } catch {
+    /* 两端均失败 */
+  }
+  return null;
+}
+
+const updateStatus = document.getElementById("update-status") as HTMLElement;
+const btnCheckUpdate = document.getElementById("btn-check-update") as HTMLButtonElement;
+
+// silent=true：仅在有新版时提示，无新版/出错都不打扰（用于启动时静默检查）。
+async function checkUpdate(silent = false) {
+  if (!silent) {
+    btnCheckUpdate.disabled = true;
+    updateStatus.textContent = "检查中…";
+  }
+  const latest = await fetchLatest();
+  if (!latest) {
+    if (!silent) updateStatus.textContent = "检查失败，请稍后重试";
+    btnCheckUpdate.disabled = false;
+    return;
+  }
+  const current = await getVersion();
+  if (compareVersion(latest.tag, current) > 0) {
+    // 有新版：在关于弹窗内提示，并提供“去下载”链接
+    updateStatus.innerHTML = `发现新版本 ${latest.tag} · <a id="update-download">去下载</a>`;
+    document.getElementById("update-download")!.addEventListener("click", () => {
+      void openUrl(latest.page);
+    });
+    if (silent && aboutOverlay.hidden) openAbout();
+  } else if (!silent) {
+    updateStatus.textContent = "已是最新版本";
+  }
+  btnCheckUpdate.disabled = false;
+}
+
 // ---------- 导出 PDF（走 WebView 打印，选“另存为 PDF”）----------
 let titleBeforePrint = "";
 
@@ -604,6 +683,7 @@ document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
 document.getElementById("btn-outline")!.addEventListener("click", toggleOutline);
 document.getElementById("btn-about")!.addEventListener("click", openAbout);
 document.getElementById("about-close")!.addEventListener("click", closeAbout);
+btnCheckUpdate.addEventListener("click", () => void checkUpdate(false));
 aboutOverlay.addEventListener("click", (e) => {
   if (e.target === aboutOverlay) closeAbout();
 });
@@ -667,5 +747,7 @@ async function init() {
   } catch {
     /* ignore */
   }
+  // 启动时静默检查一次更新：仅在有新版时弹关于窗提示，失败/最新都不打扰
+  void checkUpdate(true);
 }
 void init();

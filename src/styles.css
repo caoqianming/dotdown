@@ -304,6 +304,44 @@ body {
   color: var(--muted);
 }
 
+.about-update {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-update {
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 3px 12px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.btn-update:hover {
+  opacity: 0.9;
+}
+
+.btn-update:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-status {
+  font-size: 0.82em;
+  color: var(--muted);
+}
+
+.update-status a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .modal h3 {
   margin: 18px 0 8px;
   font-size: 0.95em;

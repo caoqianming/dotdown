@@ -27,6 +27,7 @@
 - **文件关联** — 双击 `.md` 或右键「用 Dotdown 打开」，在现有窗口开新标签
 - **文件操作** — 新建 / 打开 / 保存 / 另存为（原生对话框，Rust 读写）
 - **拖拽打开** — 把 `.md` 文件拖进窗口即可打开
+- **检查更新** — 关于弹窗内一键检查新版（优先 Gitee、回退 GitHub），有新版直达发行版下载页
 - **关于 / 帮助** — 内置弹窗展示功能介绍与快捷键
 
 ## ⌨️ 快捷键
@@ -105,10 +106,19 @@ exe；若用 GNU 构建则会**动态依赖 `WebView2Loader.dll`**，安装后�
 > `Cargo.toml` 的 `crate-type` 保留为 `["rlib"]`（桌面端足够，MSVC/GNU 均可）。
 > 仅打 NSIS 安装包（WiX/MSI 带文件关联时打包失败）。
 
+## 📥 下载
+
+发行版同时发布到 **Gitee**（国内更快）与 **GitHub**，二选一下载安装包即可：
+
+- Gitee：<https://gitee.com/caoqianming/dotdown/releases>
+- GitHub：<https://github.com/caoqianming/dotdown/releases>
+
+应用内「关于」弹窗的「检查更新」会自动比对最新发行版（优先 Gitee，失败回退 GitHub）。
+
 ## 🗺️ 路线图
 
 - [ ] 字数统计、查找替换
-- [ ] 图片粘贴、文件关联（双击 `.md` 打开）
+- [ ] 图片粘贴
 - [ ] 导出 HTML
 - [ ] 标签拖拽重排
 

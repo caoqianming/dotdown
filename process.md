@@ -14,6 +14,18 @@
 
 ---
 
+## 2026-06-11（续）
+
+### 已完成：更新检查（轻量方案，v0.2.2）
+- 关于弹窗加「检查更新」按钮 + 状态文案；启动时静默检查一次（仅有新版时弹关于窗提示）。
+- 取版本：当前 `getVersion()`，远端取发行版 `tag_name`——**优先 Gitee**
+  （`gitee.com/api/v5/...releases/latest`，国内快），失败回退 GitHub。
+- `compareVersion()` 语义化逐段比较；有新版显示 `发现新版本 vX · 去下载`，
+  用 `openUrl()`（`tauri-plugin-opener`）打开对应发行版页面（Gitee 命中开 Gitee）。
+- 网络走 webview `fetch`（CSP=null 放行）；`opener:default` 含 `allow-default-urls`，
+  无需改 capabilities。详见 `design.md §4.11`。
+- **Gitee 镜像上线**：`https://gitee.com/caoqianming/dotdown.git`（国内下载提速）。
+
 ## 2026-06-11
 
 ### 修复（v0.2.1）
