@@ -93,6 +93,7 @@ const onChange = EditorView.updateListener.of((u) => {
     renderPreview();
     refreshActiveDirty();
     updateTitle();
+    scheduleSave();
   }
 });
 
@@ -211,29 +212,37 @@ function updateTitle() {
 }
 
 // ---------- 标签操作 ----------
-function newTab(path: string | null = null, content = ""): Tab {
-  syncActive();
-  const t: Tab = { id: ++tabSeq, path, lastSaved: content, state: makeState(content) };
+/** 仅创建并加入标签，不激活（供新建与会话恢复复用）。 */
+function createTab(path: string | null, content: string, lastSaved: string): Tab {
+  const t: Tab = { id: ++tabSeq, path, lastSaved, state: makeState(content) };
   tabs.push(t);
-  activeId = t.id;
-  editor.setState(t.state);
+  return t;
+}
+
+/** 激活指定标签：换入其 state 并刷新界面。 */
+function activate(id: number) {
+  activeId = id;
+  const t = activeTab();
+  if (t) editor.setState(t.state);
   renderTabs();
   renderPreview();
   updateTitle();
   editor.focus();
+}
+
+function newTab(path: string | null = null, content = ""): Tab {
+  syncActive();
+  const t = createTab(path, content, content);
+  activate(t.id);
+  saveSession();
   return t;
 }
 
 function switchTo(id: number) {
   if (id === activeId) return;
   syncActive();
-  activeId = id;
-  const next = activeTab();
-  if (next) editor.setState(next.state);
-  renderTabs();
-  renderPreview();
-  updateTitle();
-  editor.focus();
+  activate(id);
+  saveSession();
 }
 
 async function closeTab(id: number) {
@@ -256,13 +265,11 @@ async function closeTab(id: number) {
   }
   if (id === activeId) {
     const neighbor = tabs[Math.max(0, idx - 1)];
-    activeId = neighbor.id;
-    editor.setState(neighbor.state);
-    renderPreview();
-    updateTitle();
-    editor.focus();
+    activate(neighbor.id);
+  } else {
+    renderTabs();
   }
-  renderTabs();
+  saveSession();
 }
 
 // ---------- 文件操作 ----------
@@ -316,6 +323,7 @@ async function writeTo(t: Tab, path: string) {
     t.lastSaved = content;
     renderTabs();
     updateTitle();
+    saveSession();
   } catch (e) {
     await message(String(e), { title: "保存失败", kind: "error" });
   }
@@ -335,6 +343,92 @@ editor.scrollDOM.addEventListener("scroll", () => {
   const ratio = se.scrollTop / Math.max(1, se.scrollHeight - se.clientHeight);
   previewPane.scrollTop = ratio * (previewPane.scrollHeight - previewPane.clientHeight);
 });
+
+// ---------- 会话持久化（重启恢复）----------
+// 存于 WebView 的 localStorage（Tauri 数据目录持久化）。干净的已存盘文件只记录
+// 路径、重启时从磁盘重载（能反映外部改动）；有未保存改动或未命名的标签则连内容
+// 一起保存，避免丢失。
+const SESSION_KEY = "mdview.session";
+
+interface PersistedTab {
+  path: string | null;
+  content: string | null; // null = 干净的已存盘文件，重启时从磁盘重载
+}
+
+let saveTimer = 0;
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveSession, 500);
+}
+
+function saveSession() {
+  syncActive();
+  const data = {
+    activeIndex: Math.max(
+      0,
+      tabs.findIndex((t) => t.id === activeId),
+    ),
+    tabs: tabs.map<PersistedTab>((t) => ({
+      path: t.path,
+      content: t.path && !isDirty(t) ? null : docOf(t),
+    })),
+  };
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch {
+    /* 配额/隐私模式等失败时忽略 */
+  }
+}
+
+async function restoreSession(): Promise<boolean> {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(SESSION_KEY);
+  } catch {
+    return false;
+  }
+  if (!raw) return false;
+
+  let data: { activeIndex?: number; tabs?: PersistedTab[] };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!data || !Array.isArray(data.tabs) || data.tabs.length === 0) return false;
+
+  for (const pt of data.tabs) {
+    const path = typeof pt.path === "string" ? pt.path : null;
+    let disk: string | null = null;
+    if (path) {
+      try {
+        disk = await invoke<string>("read_file", { path });
+      } catch {
+        disk = null;
+      }
+    }
+
+    let content: string;
+    let lastSaved: string;
+    if (pt.content == null) {
+      // 干净文件：用磁盘最新内容；文件已不存在则跳过该标签
+      if (disk == null) continue;
+      content = disk;
+      lastSaved = disk;
+    } else {
+      content = pt.content;
+      lastSaved = path ? (disk ?? pt.content) : "";
+    }
+    createTab(path, content, lastSaved);
+  }
+
+  if (tabs.length === 0) return false;
+  const idx = Math.min(Math.max(0, data.activeIndex ?? 0), tabs.length - 1);
+  activate(tabs[idx].id);
+  saveSession();
+  return true;
+}
 
 // ---------- 事件绑定 ----------
 document.getElementById("btn-new")!.addEventListener("click", () => newTab());
@@ -358,10 +452,15 @@ getCurrentWebview().onDragDropEvent(async (event) => {
   }
 });
 
-// 关闭前提醒未保存
+// 关闭前刷新会话并提醒未保存
 window.addEventListener("beforeunload", (e) => {
+  saveSession();
   if (tabs.some(isDirty)) e.preventDefault();
 });
 
 // ---------- 初始化 ----------
-newTab(null, WELCOME);
+async function init() {
+  const restored = await restoreSession();
+  if (!restored) newTab(null, WELCOME);
+}
+void init();

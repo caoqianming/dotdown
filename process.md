@@ -7,12 +7,20 @@
 - [x] **M1 项目骨架**：Tauri 2 + Vanilla TS 脚手架、命名、工具链打通
 - [x] **M2 核心编辑/预览**：CodeMirror 编辑 + markdown-it 预览、文件读写、视图切换、滚动同步
 - [x] **M3 多标签页**：多文档并行、标签栏、切换/关闭/去重
-- [ ] **M4 体验增强**：深色模式、大纲侧栏、会话恢复
+- [ ] **M4 体验增强**：会话恢复 ✅ / 深色模式 / 大纲侧栏
 - [ ] **M5 发布**：图标/产品信息、`tauri build` 打包
 
 ---
 
 ## 2026-06-11
+
+### 已完成：M4 会话恢复（重启还原标签）
+- localStorage 持久化（key `mdview.session`），详见 design.md §4.4。
+  - [x] 干净已存盘文件只存路径、重启从磁盘重载；脏/未命名标签连内容一起存
+  - [x] 保存时机：结构性操作即时 + 编辑防抖 500ms + beforeunload 兜底
+  - [x] 文件被外部删除则跳过；恢复后还原 activeIndex
+  - [x] 抽出 `createTab`/`activate`，新建与恢复复用
+  - [x] 验证：`tsc` ✅、`tauri dev` 启动成功 ✅
 
 ### 已完成：M3 多标签页
 - 实现：单 `EditorView` + 每标签独立 `EditorState`（详见 design.md §4.2）。

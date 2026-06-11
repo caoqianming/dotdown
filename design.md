@@ -89,7 +89,32 @@ interface Tab {
 `#app` 的 class 在 `mode-editor` / `mode-split` / `mode-preview` 间切换，用 CSS
 控制左右面板显隐，无需 JS 重排。
 
-### 4.4 滚动同步
+### 4.4 会话恢复
+
+重启后自动还原上次打开的标签。持久化到 WebView 的 `localStorage`
+（key `mdview.session`，Tauri 数据目录会保留）。
+
+持久化结构：
+
+```ts
+interface PersistedTab {
+  path: string | null;
+  content: string | null; // null = 干净的已存盘文件，重启时从磁盘重载
+}
+// { activeIndex: number, tabs: PersistedTab[] }
+```
+
+策略：
+
+- **干净的已存盘文件**：只存路径（`content = null`），重启时从磁盘重载——能反映
+  外部改动，也避免大文件占满 localStorage 配额。文件已删除则跳过该标签。
+- **有未保存改动 / 未命名标签**：连内容一起存，重启后 `lastSaved` 取磁盘内容（若可读），
+  故未保存差异仍标记为 dirty，编辑不丢失。
+
+保存时机：结构性操作（新建/切换/关闭/保存）后立即保存；编辑时防抖 500ms 保存；
+`beforeunload` 兜底刷新。
+
+### 4.5 滚动同步
 
 编辑器 `scrollDOM` 滚动时按比例设置预览面板 `scrollTop`（编辑器 → 预览，单向）。
 绑定一次，跨标签复用同一 View 故无需重绑。
