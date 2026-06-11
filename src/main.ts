@@ -3,6 +3,7 @@ import { open, save, message, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
 
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
@@ -184,6 +185,7 @@ function makeState(doc: string): EditorState {
         { key: "Mod-t", run: () => (newTab(), true) },
         { key: "Mod-w", run: () => (closeTab(activeId), true) },
         { key: "Mod-\\", run: () => (toggleOutline(), true) },
+        { key: "Mod-p", run: () => (exportPdf(), true) },
       ]),
     ],
   });
@@ -467,6 +469,24 @@ function closeAbout() {
   aboutOverlay.hidden = true;
 }
 
+// ---------- 导出 PDF（走 WebView 打印，选“另存为 PDF”）----------
+let titleBeforePrint = "";
+
+window.addEventListener("afterprint", () => {
+  if (titleBeforePrint) {
+    document.title = titleBeforePrint;
+    titleBeforePrint = "";
+  }
+});
+
+function exportPdf() {
+  const t = activeTab();
+  // 用文件名作为 PDF 默认文件名（去扩展名），打印结束后还原
+  titleBeforePrint = document.title;
+  document.title = t && t.path ? nameOf(t).replace(/\.[^.]+$/, "") : "Dotdown";
+  window.print();
+}
+
 // ---------- 滚动同步（编辑器 -> 预览）----------
 editor.scrollDOM.addEventListener("scroll", () => {
   const se = editor.scrollDOM;
@@ -565,6 +585,7 @@ document.getElementById("btn-new")!.addEventListener("click", () => newTab());
 document.getElementById("btn-open")!.addEventListener("click", openFile);
 document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
+document.getElementById("btn-pdf")!.addEventListener("click", exportPdf);
 document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
 document.getElementById("btn-outline")!.addEventListener("click", toggleOutline);
 document.getElementById("btn-about")!.addEventListener("click", openAbout);
@@ -613,5 +634,17 @@ async function init() {
   }
   const restored = await restoreSession();
   if (!restored) newTab(null, WELCOME);
+
+  // 文件关联：监听二次实例转发的文件
+  void listen<string>("open-file", (e) => {
+    if (e.payload) void loadPath(e.payload);
+  });
+  // 本次启动若由双击/右键“用 Dotdown 打开”带入文件，打开它
+  try {
+    const f = await invoke<string | null>("initial_file");
+    if (f) await loadPath(f);
+  } catch {
+    /* ignore */
+  }
 }
 void init();

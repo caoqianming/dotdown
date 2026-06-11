@@ -143,6 +143,25 @@ interface PersistedTab {
 `@tauri-apps/api/app` 的 `getVersion()` 动态读取。关闭：× / 点遮罩 / Esc。
 弹窗用同一套 CSS 变量随主题换肤。
 
+### 4.9 导出 PDF
+
+走 WebView 的 `window.print()` → 系统打印「另存为 PDF」。`@media print` 只输出
+`.markdown-body`、强制浅色（用 `!important` 覆盖主题变量，保证可读），代码块以
+`print-color-adjust: exact` 保留深色高亮；并对代码块/表格/图片 `break-inside: avoid`
+避免跨页截断。打印前把 `document.title` 临时设为文件名（PDF 默认文件名），`afterprint`
+还原。
+
+### 4.10 文件关联 / 双击打开
+
+- `tauri.conf.json` 的 `bundle.fileAssociations` 注册 `.md/.markdown/.mdown`，安装包
+  把应用登记为可打开这些类型（出现在「打开方式」）。
+- **右键「用 Dotdown 打开」**：NSIS 安装钩子 `installer-hooks.nsh` 在
+  `HKCU\...\SystemFileAssociations\.md\shell` 下写入菜单项，卸载时删除。
+- **打开流程**：双击/右键经命令行把文件路径传给应用。后端 `initial_file` 命令读取本次
+  启动参数；已运行时，`tauri-plugin-single-instance` 捕获二次启动并 `emit("open-file")`
+  转发到现有窗口 + 聚焦。前端在启动时调 `initial_file`、并 `listen("open-file")`，
+  统一交给 `loadPath`（按路径去重）。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -153,20 +172,24 @@ interface PersistedTab {
 | Ctrl+Shift+S | 另存为 |
 | Ctrl+W | 关闭当前标签 |
 | Ctrl+\ | 开关大纲侧栏 |
+| Ctrl+P | 导出 PDF |
 
 ## 6. 构建与工具链注意
 
-本机默认 Rust 工具链为 GNU（`x86_64-pc-windows-gnu`）。Tauri 默认 `cdylib`
-crate-type 会导出海量符号，触发 GNU `ld` 的 `export ordinal too large` 链接错误。
-故 `src-tauri/Cargo.toml` 已将 `crate-type` 精简为 `["rlib"]`（桌面端足够）。
-日后做移动端需改回含 `cdylib` 并切换 MSVC 工具链。
+- **MSVC 工具链**：`src-tauri/rust-toolchain.toml` 固定为 `stable-x86_64-pc-windows-msvc`。
+  MSVC 会把 WebView2 loader 静态链接，生成自包含 exe；若用 GNU 构建则动态依赖
+  `WebView2Loader.dll`，安装后会报缺 dll。需先装 VS C++ 生成工具。
+- **crate-type**：保留 `["rlib"]`（桌面端足够，MSVC/GNU 均可）。早期用 GNU 时，Tauri 默认的
+  `cdylib` 会触发 GNU `ld` 的 `export ordinal too large` 链接错误，故精简为 rlib；改用 MSVC
+  后该限制已不存在，但 rlib 仍够用故保留。
+- **打包目标**：仅 NSIS（见 §4.10）。WiX/MSI 在带文件关联时打包失败。
 
 ## 7. 后续路线（Roadmap）
 
-> 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、发布打包（v0.1.0）。
+> 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、导出 PDF、
+> 文件关联 / 双击打开 / 右键菜单、发布打包。
 
-- [ ] 文件关联 / 双击 `.md` 打开（启动参数）
-- [ ] 导出 PDF / HTML
+- [ ] 导出 HTML
 - [ ] 标签拖拽重排
 - [ ] 字数统计、查找替换
 
@@ -175,4 +198,5 @@ crate-type 会导出海量符号，触发 GNU `ld` 的 `export ordinal too large
 1. **自定义 Rust 文件命令 vs plugin-fs**：选前者，权限边界清晰、无需配置 fs scope。
 2. **源码+预览分栏 vs WYSIWYG**：选分栏，贴合诉求且实现成本低。
 3. **单 View + 多 State 的标签实现**：隔离每标签历史/光标，省内存。
-4. **crate-type = ["rlib"]**：适配本机 GNU 工具链，绕开链接器导出上限。
+4. **固定 MSVC 工具链**：WebView2 loader 静态链接，exe 自包含；避免 GNU 动态依赖
+   `WebView2Loader.dll` 导致安装缺 dll。`crate-type` 保留 `["rlib"]`。

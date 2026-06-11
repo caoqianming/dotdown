@@ -531,3 +531,70 @@ body {
 .hljs-type {
   color: #ffa657;
 }
+
+/* ---------- 打印 / 导出 PDF ---------- */
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  /* 强制浅色（不随当前主题），保证 PDF 可读 */
+  :root {
+    --bg: #ffffff !important;
+    --bg-alt: #f6f7f9 !important;
+    --border: #e2e4e8 !important;
+    --text: #111111 !important;
+    --muted: #555555 !important;
+    --accent: #1a56db !important;
+    --code-bg: #f3f4f6 !important;
+    --hover: #eeeeee !important;
+  }
+
+  /* 只输出预览，隐藏其余 UI */
+  .toolbar,
+  .tabbar,
+  .outline,
+  .pane-editor,
+  .divider,
+  .modal-overlay {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #app,
+  .panes,
+  .pane-preview {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    background: #fff !important;
+  }
+
+  .markdown-body {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #111 !important;
+  }
+
+  /* 代码块保留深色高亮（数字 PDF 无需省墨）*/
+  .markdown-body pre {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 避免被分页截断 */
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-body img,
+  .markdown-body blockquote {
+    break-inside: avoid;
+  }
+
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3 {
+    break-after: avoid;
+  }
+}

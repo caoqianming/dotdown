@@ -23,6 +23,8 @@
 - **深色模式** — 浅色 / 深色 / 跟随系统三态切换
 - **视图切换** — 编辑 / 分栏 / 预览；编辑器 → 预览滚动同步
 - **GitHub 风格渲染** — 表格、任务列表、代码高亮（highlight.js）
+- **导出 PDF** — 一键把预览导出为 PDF（走系统打印「另存为 PDF」）
+- **文件关联** — 双击 `.md` 或右键「用 Dotdown 打开」，在现有窗口开新标签
 - **文件操作** — 新建 / 打开 / 保存 / 另存为（原生对话框，Rust 读写）
 - **拖拽打开** — 把 `.md` 文件拖进窗口即可打开
 - **关于 / 帮助** — 内置弹窗展示功能介绍与快捷键
@@ -37,6 +39,7 @@
 | `Ctrl+Shift+S`      | 另存为       |
 | `Ctrl+W`            | 关闭当前标签 |
 | `Ctrl+\`            | 开关大纲侧栏 |
+| `Ctrl+P`            | 导出 PDF     |
 
 ## 🧱 技术栈
 
@@ -70,8 +73,10 @@ npm run tauri build   # 生成发布版
 
 构建产物位于 `src-tauri/target/release/`：
 
-- 可执行文件：`Dotdown.exe`
-- 安装包：`bundle/msi/*.msi`、`bundle/nsis/*-setup.exe`
+- 免安装可执行文件：`dotdown.exe`
+- 安装包（NSIS）：`bundle/nsis/Dotdown_<版本>_x64-setup.exe`
+
+> 仅打 NSIS 安装包：它支持文件关联并承载右键菜单钩子；WiX/MSI 在带文件关联时打包失败，故移除。
 
 ## 📁 项目结构
 
@@ -92,18 +97,19 @@ dotdown/
 
 ## ⚠️ Windows 工具链说明
 
-若使用 **GNU 工具链（`x86_64-pc-windows-gnu`）**，Tauri 默认的 `cdylib`
-crate-type 会导出海量符号，触发 GNU `ld` 的 `export ordinal too large` 链接错误。
-因此本项目 `src-tauri/Cargo.toml` 中已将 `crate-type` 精简为 `["rlib"]`（桌面端足够）。
+项目用 `src-tauri/rust-toolchain.toml` 固定 **MSVC 工具链**
+（`stable-x86_64-pc-windows-msvc`）：MSVC 会把 WebView2 loader 静态链接，生成自包含
+exe；若用 GNU 构建则会**动态依赖 `WebView2Loader.dll`**，安装后可能报缺 dll。
+构建前请先安装 [VS C++ 生成工具](https://visualstudio.microsoft.com/visual-cpp-build-tools/)。
 
-> 若日后要做 Android/iOS，需把 `crate-type` 改回 `["staticlib", "cdylib", "rlib"]`，
-> 并改用 MSVC 工具链或解决 GNU 链接器限制。
+> `Cargo.toml` 的 `crate-type` 保留为 `["rlib"]`（桌面端足够，MSVC/GNU 均可）。
+> 仅打 NSIS 安装包（WiX/MSI 带文件关联时打包失败）。
 
 ## 🗺️ 路线图
 
 - [ ] 字数统计、查找替换
 - [ ] 图片粘贴、文件关联（双击 `.md` 打开）
-- [ ] 导出 PDF / HTML
+- [ ] 导出 HTML
 - [ ] 标签拖拽重排
 
 ## 📄 License

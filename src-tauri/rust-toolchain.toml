@@ -1,0 +1,4 @@
+# 固定用 MSVC 工具链构建：WebView2 loader 静态链接，生成自包含 exe，
+# 避免 GNU 构建动态依赖 WebView2Loader.dll 导致安装后缺 dll。
+[toolchain]
+channel = "stable-x86_64-pc-windows-msvc"

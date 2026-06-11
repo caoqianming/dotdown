@@ -12,8 +12,8 @@ Dotdown —— 用 Tauri 2 打造的 Markdown 预览/编辑桌面小工具。
 
 ## 关键约定
 
-- **开发**：`npm run tauri dev`；**打包**：`npm run tauri build`（产物在 `src-tauri/target/release/`，含 `Dotdown.exe` 与 `bundle/` 下的 msi/nsis）。
+- **开发**：`npm run tauri dev`；**打包**：`npm run tauri build`（产物在 `src-tauri/target/release/`，含 `dotdown.exe` 与 `bundle/nsis/` 下的 NSIS 安装包）。
 - **联网命令需带代理**：`$env:HTTP_PROXY/HTTPS_PROXY = "http://127.0.0.1:7897"`（npm/cargo/git 推送/REST API）。
-- **Windows 工具链坑**：本机默认 Rust 为 GNU，`src-tauri/Cargo.toml` 的 `crate-type` 已精简为 `["rlib"]` 以绕开 GNU 链接器导出上限；做移动端才需改回含 `cdylib` 并切 MSVC。
+- **Windows 工具链**：项目用 `src-tauri/rust-toolchain.toml` 固定 **MSVC**（WebView2 loader 静态链接、exe 自包含；GNU 构建会动态依赖 `WebView2Loader.dll` 导致安装缺 dll）。`crate-type` 保留 `["rlib"]`。打包仅 NSIS。
 - **发布**：源码推 GitHub（`caoqianming/dotdown`，HTTPS），二进制作为 **Release 资产**上传（不进 git 历史）。
 - **提交信息**：用中文、`类型: 摘要` 风格（如 `feat:` / `docs:` / `chore:`）。

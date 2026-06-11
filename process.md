@@ -16,6 +16,21 @@
 
 ## 2026-06-11
 
+### 已完成：导出 PDF + 文件关联（v0.2.0）
+- **导出 PDF**：`window.print()` + `@media print`（只输出预览、强制浅色、代码块保留高亮、
+  避免跨页截断）；工具栏「导出PDF」按钮 / Ctrl+P；PDF 默认文件名取自文件名。
+- **文件关联 / 双击打开**：`bundle.fileAssociations` 注册 `.md/.markdown/.mdown`；
+  `tauri-plugin-single-instance` 转发二次启动的文件到现有窗口；后端 `initial_file`
+  读取启动参数，前端 `listen("open-file")` + 启动时打开。
+- **右键「用 Dotdown 打开」**：NSIS 钩子 `installer-hooks.nsh` 写 `SystemFileAssociations`
+  注册表项（卸载删除）。
+- 版本号升至 **0.2.0**。
+- 打包目标改为**仅 NSIS**：WiX/MSI 带文件关联时 `light.exe` 打包失败，且右键钩子本就只用于 NSIS。
+- **修复安装后“缺 web dll”**：GNU 构建动态依赖 `WebView2Loader.dll`，安装包未带 → 启动报错。
+  改用 `rust-toolchain.toml` 固定 **MSVC** 工具链，WebView2 loader 静态链接，exe 自包含
+  （10MB，安装包 2.9MB）；dumpbin 确认依赖里已无 `WebView2Loader.dll`。
+- 注：文件关联/右键菜单需**安装新包后生效**。
+
 ### 更名：mdview → Dotdown
 - 全量替换：productName / 包名 / crate 名（`dotdown_lib`）/ identifier
   (`com.caoqi.dotdown`) / 窗口标题 / 关于弹窗 / localStorage key（`dotdown.*`）/ 文档。
