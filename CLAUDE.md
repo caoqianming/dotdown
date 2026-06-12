@@ -16,4 +16,6 @@ Dotdown —— 用 Tauri 2 打造的 Markdown 预览/编辑桌面小工具。
 - **联网命令需带代理**：`$env:HTTP_PROXY/HTTPS_PROXY = "http://127.0.0.1:7897"`（npm/cargo/git 推送/REST API）。
 - **Windows 工具链**：项目用 `src-tauri/rust-toolchain.toml` 固定 **MSVC**（WebView2 loader 静态链接、exe 自包含；GNU 构建会动态依赖 `WebView2Loader.dll` 导致安装缺 dll）。`crate-type` 保留 `["rlib"]`。打包仅 NSIS。
 - **发布**：源码推 GitHub（`caoqianming/dotdown`，HTTPS），二进制作为 **Release 资产**上传（不进 git 历史）。
+- **Gitee 上午不可用**：本机网络环境下，**每天上午 gitee.com 连不上**（git push / API 都会 SSL 重置）。
+  发布以 GitHub 为准；Gitee 的推送与 Release 等下午网络恢复再补，或二进制用网页端手动上传。别在上午为 Gitee 反复重试。
 - **提交信息**：用中文、`类型: 摘要` 风格（如 `feat:` / `docs:` / `chore:`）。

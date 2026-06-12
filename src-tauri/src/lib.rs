@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 use tauri::{Emitter, Manager};
 
 /// 读取磁盘上的文本文件，返回内容。
@@ -35,6 +36,42 @@ fn first_file_arg(argv: &[String]) -> Option<String> {
     argv.iter().skip(1).find(|a| is_md_path(a)).cloned()
 }
 
+/// 复刻“双击标题栏把窗口最大化”那一下：在扩展屏上把窗口**最大化并保持**，逼 WebView2
+/// 按当前显示器 DPI 重新铺满画面。扩展屏与主屏 DPI 不同时，窗口以非最大化尺寸首次出现
+/// 会按错误的栅格化比例渲染，导致右侧内容被裁掉；最大化这一步是 Windows 驱动的重排，
+/// 会让 WebView2 重新铺满。**关键：最终必须停在最大化状态**——上一版切回非最大化又坏了。
+fn nudge_repaint(window: tauri::WebviewWindow) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(60));
+        if window.is_maximized().unwrap_or(false) {
+            // 已最大化但画面坏：切出去再切回来，最终仍停在最大化
+            let _ = window.unmaximize();
+            std::thread::sleep(Duration::from_millis(80));
+        }
+        let _ = window.maximize();
+    });
+}
+
+/// 窗口当前是否落在非主显示器上（按显示器位置判断）。
+fn on_secondary_monitor(window: &tauri::WebviewWindow) -> bool {
+    let cur = window.current_monitor().ok().flatten();
+    let pri = window.primary_monitor().ok().flatten();
+    match (cur, pri) {
+        (Some(c), Some(p)) => c.position() != p.position(),
+        _ => false,
+    }
+}
+
+/// 前端首屏渲染完成后调用：仅当窗口落在扩展屏时才抖一下（主屏无此问题，避免无谓闪烁）。
+#[tauri::command]
+fn fix_webview_paint(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        if on_secondary_monitor(&w) {
+            nudge_repaint(w);
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -49,7 +86,12 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_file, write_file, initial_file])
+        .invoke_handler(tauri::generate_handler![
+            read_file,
+            write_file,
+            initial_file,
+            fix_webview_paint
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -766,5 +766,9 @@ async function init() {
   }
   // 启动时静默检查一次更新：仅在有新版时弹关于窗提示，失败/最新都不打扰
   void checkUpdate(true);
+
+  // 首屏渲染完成后，让后端抖一下窗口尺寸，逼 WebView2 按当前显示器/DPI 重新铺设画面。
+  // 修复在扩展屏上首次打开时右侧内容被裁掉、需手动拖动才正常的问题。
+  requestAnimationFrame(() => void invoke("fix_webview_paint").catch(() => {}));
 }
 void init();

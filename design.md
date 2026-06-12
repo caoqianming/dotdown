@@ -136,10 +136,19 @@ interface PersistedTab {
 
 注意：视图模式切换用 `classList` 增删 `mode-*`，避免覆盖 `outline-open` 类。
 
-**WebView2 局部不重绘修复**：Windows WebView2 偶发预览渲染后局部空白（尤其下半部分），
-拖动/缩放窗口才刷新。`forceRepaint()` 在同一 JS 任务内切一次预览 `display` 触发同步
-重排+重绘（中间态不被绘制故无闪烁，并保留滚动位置），于 `renderPreview` / `setMode` /
-`setOutline` 后调用。
+**WebView2 局部不重绘修复（两层）**：
+
+1. *DOM 层*：预览渲染后偶发局部空白（尤其下半部分），拖动/缩放窗口才刷新。
+   `forceRepaint()` 在同一 JS 任务内切一次预览 `display` 触发同步重排+重绘（中间态不被
+   绘制故无闪烁，并保留滚动位置），于 `renderPreview` / `setMode` / `setOutline` 后调用。
+
+2. *窗口/画面层（扩展屏 DPI）*：扩展屏与主屏**缩放比例不同**时，窗口以非最大化尺寸
+   在扩展屏首次出现，会按错误的栅格化比例渲染，右侧内容被裁掉，需手动双击标题栏/拖动才铺满。
+   前端首屏渲染完成后 `invoke("fix_webview_paint")`，后端 `nudge_repaint()` 在**仅当窗口
+   落在非主显示器**（`on_secondary_monitor`，按显示器位置判断）时，**把窗口最大化并保持**
+   （等价于用户手动双击标题栏）——这一步是 Windows 驱动的重排，逼 WebView2 重新铺满。
+   **关键：最终必须停在最大化状态**：1px 抖动太小无效、最大化窗口 `set_size` 被系统忽略、
+   且切回非最大化又会复现裁切。仅在扩展屏触发，主屏正常打开不受影响、无多余闪烁。
 
 ### 4.7 滚动同步
 
