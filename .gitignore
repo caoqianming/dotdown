@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# 环境变量 / 本地令牌（含 Gitee/GitHub 发布令牌，切勿提交）
+.env
+.env.*
+!.env.example
+
 # Claude Code local settings
 .claude/settings.local.json
 
