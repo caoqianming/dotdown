@@ -382,8 +382,88 @@ body {
   border: 1px solid var(--border);
 }
 
+/* ---------- 搜索条 ---------- */
+.search-bar {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.search-bar[hidden] {
+  display: none;
+}
+
+.search-bar input {
+  width: 180px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.search-bar input:focus {
+  border-color: var(--accent);
+}
+
+.search-count {
+  min-width: 50px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-bar button {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.search-bar button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 预览搜索高亮 */
+.markdown-body mark.search-hit {
+  background: #ffe58f;
+  color: inherit;
+  border-radius: 2px;
+}
+
+.markdown-body mark.search-hit-current {
+  background: #ffa940;
+}
+
+:root[data-theme="dark"] .markdown-body mark.search-hit {
+  background: #6b5900;
+  color: #fff;
+}
+
+:root[data-theme="dark"] .markdown-body mark.search-hit-current {
+  background: #b8860b;
+}
+
 /* ---------- 面板布局 ---------- */
 .panes {
+  position: relative;
   flex: 1;
   display: flex;
   min-height: 0;
@@ -594,6 +674,7 @@ body {
   .outline,
   .pane-editor,
   .divider,
+  .search-bar,
   .modal-overlay {
     display: none !important;
   }

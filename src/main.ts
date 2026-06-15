@@ -12,6 +12,7 @@ import { basicSetup } from "codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { search, setSearchQuery, SearchQuery, findNext, findPrevious } from "@codemirror/search";
 
 import MarkdownIt from "markdown-it";
 // @ts-expect-error: 该插件无类型声明
@@ -177,13 +178,16 @@ function makeState(doc: string): EditorState {
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       themeCompartment.of(editorThemeExt()),
       EditorView.lineWrapping,
+      // 搜索高亮（用自定义搜索条驱动，不开 CM 自带面板）
+      search(),
       onChange,
       keymap.of([
+        { key: "Mod-f", run: () => (openSearch(), true) },
         { key: "Mod-s", run: () => (saveFile(), true) },
         { key: "Mod-Shift-s", run: () => (saveFileAs(), true) },
         { key: "Mod-o", run: () => (openFile(), true) },
-        { key: "Mod-n", run: () => (newTab(), true) },
-        { key: "Mod-t", run: () => (newTab(), true) },
+        { key: "Mod-n", run: () => (newBlankDoc(), true) },
+        { key: "Mod-t", run: () => (newBlankDoc(), true) },
         { key: "Mod-w", run: () => (closeTab(activeId), true) },
         { key: "Mod-\\", run: () => (toggleOutline(), true) },
         { key: "Mod-p", run: () => (exportPdf(), true) },
@@ -279,6 +283,8 @@ function renderPreview() {
   previewEl.innerHTML = md.render(editor.state.doc.toString());
   buildOutline();
   forceRepaint();
+  // 预览被重建会清掉高亮，若正在预览中搜索则重新标注
+  if (!searchBar.hidden && searchTarget() === "preview") highlightPreview(searchInput.value);
 }
 
 /**
@@ -344,6 +350,12 @@ function switchTo(id: number) {
   saveSession();
 }
 
+/** 用户主动新建空白文档：新建标签并切到分栏（预览模式下看不到编辑器，无法直接写）。 */
+function newBlankDoc() {
+  newTab();
+  setMode("split");
+}
+
 async function closeTab(id: number) {
   const t = tabs.find((x) => x.id === id);
   if (!t) return;
@@ -388,11 +400,13 @@ async function loadPath(path: string) {
   const existing = tabs.find((t) => t.path === path);
   if (existing) {
     switchTo(existing.id);
+    setMode("split"); // 打开文件即切到分栏，方便边看边改
     return;
   }
   try {
     const content = await invoke<string>("read_file", { path });
     newTab(path, content);
+    setMode("split");
   } catch (e) {
     await message(String(e), { title: "打开失败", kind: "error" });
   }
@@ -445,6 +459,8 @@ function setMode(mode: ViewMode) {
     /* ignore */
   }
   forceRepaint();
+  // 切换视图会改变搜索目标（编辑器/预览），重跑当前查询
+  if (!searchBar.hidden) runSearch();
 }
 
 // ---------- 大纲侧栏 ----------
@@ -487,6 +503,163 @@ function setOutline(open: boolean) {
 
 function toggleOutline() {
   setOutline(!appEl.classList.contains("outline-open"));
+}
+
+// ---------- 搜索（编辑器 + 预览统一搜索条）----------
+// 预览模式搜渲染后的 DOM（高亮 mark 并逐个跳转）；编辑/分栏模式驱动 CodeMirror
+// 的 search 扩展（高亮全部匹配，findNext/findPrevious 跳转）。
+const searchBar = document.getElementById("search-bar") as HTMLElement;
+const searchInput = document.getElementById("search-input") as HTMLInputElement;
+const searchCount = document.getElementById("search-count") as HTMLElement;
+
+let previewHits: HTMLElement[] = [];
+let previewIdx = -1;
+
+/** 当前搜索目标：预览模式搜预览，否则（编辑/分栏）搜编辑器。 */
+function searchTarget(): "editor" | "preview" {
+  return appEl.classList.contains("mode-preview") ? "preview" : "editor";
+}
+
+function openSearch() {
+  searchBar.hidden = false;
+  searchInput.focus();
+  searchInput.select();
+  runSearch();
+}
+
+function closeSearch() {
+  searchBar.hidden = true;
+  clearPreviewHighlights();
+  editor.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: "" })) });
+  editor.focus();
+}
+
+/** 输入变化时执行：按当前目标分派到编辑器或预览。 */
+function runSearch() {
+  if (searchBar.hidden) return;
+  const q = searchInput.value;
+  if (searchTarget() === "preview") {
+    editor.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: "" })) });
+    highlightPreview(q);
+  } else {
+    clearPreviewHighlights();
+    editor.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: q })) });
+    if (q) findNext(editor);
+    updateCount();
+  }
+}
+
+function searchNext() {
+  if (searchTarget() === "preview") {
+    if (!previewHits.length) return;
+    previewIdx = (previewIdx + 1) % previewHits.length;
+    setCurrentHit();
+    updateCount();
+  } else {
+    findNext(editor);
+  }
+}
+
+function searchPrev() {
+  if (searchTarget() === "preview") {
+    if (!previewHits.length) return;
+    previewIdx = (previewIdx - 1 + previewHits.length) % previewHits.length;
+    setCurrentHit();
+    updateCount();
+  } else {
+    findPrevious(editor);
+  }
+}
+
+// ----- 预览（DOM）搜索 -----
+/** 还原所有 <mark> 高亮：用其文本节点替换，并合并相邻文本节点。 */
+function clearPreviewHighlights() {
+  previewEl.querySelectorAll("mark.search-hit").forEach((m) => {
+    const parent = m.parentNode;
+    if (!parent) return;
+    parent.replaceChild(document.createTextNode(m.textContent ?? ""), m);
+    parent.normalize();
+  });
+  previewHits = [];
+  previewIdx = -1;
+}
+
+/** 在预览 DOM 中大小写不敏感地高亮所有匹配，定位到第一个。 */
+function highlightPreview(query: string) {
+  clearPreviewHighlights();
+  if (!query) {
+    updateCount();
+    return;
+  }
+  const needle = query.toLowerCase();
+  const targets: Text[] = [];
+  const walker = document.createTreeWalker(previewEl, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const v = node.nodeValue;
+      if (!v) return NodeFilter.FILTER_REJECT;
+      const tag = node.parentElement?.tagName;
+      if (tag === "SCRIPT" || tag === "STYLE") return NodeFilter.FILTER_REJECT;
+      return v.toLowerCase().includes(needle)
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    },
+  });
+  let n: Node | null;
+  while ((n = walker.nextNode())) targets.push(n as Text);
+
+  for (const node of targets) {
+    const text = node.nodeValue ?? "";
+    const lower = text.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let i = 0;
+    let pos = lower.indexOf(needle, i);
+    while (pos !== -1) {
+      if (pos > i) frag.appendChild(document.createTextNode(text.slice(i, pos)));
+      const mark = document.createElement("mark");
+      mark.className = "search-hit";
+      mark.textContent = text.slice(pos, pos + query.length);
+      frag.appendChild(mark);
+      previewHits.push(mark);
+      i = pos + query.length;
+      pos = lower.indexOf(needle, i);
+    }
+    if (i < text.length) frag.appendChild(document.createTextNode(text.slice(i)));
+    node.parentNode?.replaceChild(frag, node);
+  }
+
+  previewIdx = previewHits.length ? 0 : -1;
+  setCurrentHit();
+  updateCount();
+}
+
+function setCurrentHit() {
+  previewHits.forEach((m, i) => m.classList.toggle("search-hit-current", i === previewIdx));
+  if (previewIdx >= 0)
+    previewHits[previewIdx].scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+/** 更新匹配计数：预览显示「当前/总数」，编辑器显示总数。 */
+function updateCount() {
+  const q = searchInput.value;
+  if (searchTarget() === "preview") {
+    searchCount.textContent = previewHits.length
+      ? `${previewIdx + 1}/${previewHits.length}`
+      : q
+        ? "无结果"
+        : "";
+    return;
+  }
+  if (!q) {
+    searchCount.textContent = "";
+    return;
+  }
+  const sq = new SearchQuery({ search: q });
+  let count = 0;
+  if (sq.valid) {
+    const cursor = sq.getCursor(editor.state.doc);
+    while (!cursor.next().done) count++;
+  }
+  searchCount.textContent = count ? `${count} 处` : "无结果";
 }
 
 // ---------- 关于 / 帮助 弹窗 ----------
@@ -690,11 +863,12 @@ async function restoreSession(): Promise<boolean> {
 }
 
 // ---------- 事件绑定 ----------
-document.getElementById("btn-new")!.addEventListener("click", () => newTab());
+document.getElementById("btn-new")!.addEventListener("click", () => newBlankDoc());
 document.getElementById("btn-open")!.addEventListener("click", openFile);
 document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
 document.getElementById("btn-pdf")!.addEventListener("click", exportPdf);
+document.getElementById("btn-search")!.addEventListener("click", openSearch);
 document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
 document.getElementById("btn-outline")!.addEventListener("click", toggleOutline);
 document.getElementById("btn-about")!.addEventListener("click", openAbout);
@@ -705,6 +879,29 @@ aboutOverlay.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !aboutOverlay.hidden) closeAbout();
+});
+
+// 搜索条事件
+document.getElementById("search-next")!.addEventListener("click", searchNext);
+document.getElementById("search-prev")!.addEventListener("click", searchPrev);
+document.getElementById("search-close")!.addEventListener("click", closeSearch);
+searchInput.addEventListener("input", runSearch);
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (e.shiftKey) searchPrev();
+    else searchNext();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeSearch();
+  }
+});
+// 预览模式下编辑器无焦点，靠全局 Ctrl+F 唤起搜索条
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
+    e.preventDefault();
+    openSearch();
+  }
 });
 document
   .querySelectorAll(".view-modes button")

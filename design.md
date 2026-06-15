@@ -92,6 +92,11 @@ LF，否则打开 CRLF 文件会被误判为已编辑），即 `eol(docOf(tab)) 
 控制左右面板显隐，无需 JS 重排。默认 **预览** 模式，并记住上次选择（`localStorage`
 key `dotdown.mode`）。
 
+**打开/新建文档自动切分栏**：默认预览模式下编辑器不可见——打开文件只能看不能改，新建空白
+文档更是无处下笔。故**打开文件**（`loadPath`，含对话框/拖拽/双击关联）与**用户主动新建**
+（Ctrl+N/T 或「新建」按钮，`newBlankDoc`）后切到 `split`。会话恢复（启动还原标签）与关掉
+最后一个标签后的占位空白**不强切**，以尊重记住的模式。
+
 ### 4.4 会话恢复
 
 重启后自动还原上次打开的标签。持久化到 WebView 的 `localStorage`
@@ -201,6 +206,24 @@ interface PersistedTab {
 > 升级到「完整自动更新」时再引入 `tauri-plugin-updater` + 签名密钥 + `latest.json` 端点
 > （端点可列 Gitee 优先、GitHub 备用）。
 
+### 4.12 查找（编辑器 + 预览统一搜索条）
+
+`Ctrl+F`（或工具栏「查找」按钮）唤起浮于面板右上角的搜索条。**搜索目标随当前视图模式分派**：
+
+- **预览模式** → 搜渲染后的预览 DOM：用 `TreeWalker` 收集匹配的文本节点，把命中片段
+  包成 `<mark class="search-hit">`（大小写不敏感），逐个高亮；当前项额外加
+  `search-hit-current` 并 `scrollIntoView`。计数显示「当前/总数」。
+- **编辑/分栏模式** → 驱动 CodeMirror 的 `@codemirror/search` 扩展：`setSearchQuery`
+  设置查询（高亮全部匹配），`findNext`/`findPrevious` 跳转；计数用 `SearchQuery.getCursor`
+  遍历得到总数。**不开 CM 自带面板**，统一用自定义搜索条。
+
+**清理与重标**：关闭搜索条时还原所有 `<mark>`（用文本节点替换 + `normalize` 合并）并清空
+编辑器查询。预览被重建（编辑、切标签）会清掉高亮，故 `renderPreview` 末尾若正在预览中搜索
+则重新标注；`setMode` 切换会改变搜索目标，开着搜索条时重跑当前查询。
+
+**交互**：输入即时搜索；`Enter`/`Shift+Enter` 下一个/上一个；`Esc` 关闭。打印时
+`.search-bar` 一并隐藏。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -211,6 +234,7 @@ interface PersistedTab {
 | Ctrl+Shift+S | 另存为 |
 | Ctrl+W | 关闭当前标签 |
 | Ctrl+\ | 开关大纲侧栏 |
+| Ctrl+F | 查找（编辑器 / 预览） |
 | Ctrl+P | 导出 PDF |
 
 ## 6. 构建与工具链注意
@@ -226,13 +250,14 @@ interface PersistedTab {
 ## 7. 后续路线（Roadmap）
 
 > 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、导出 PDF、
-> 文件关联 / 双击打开 / 右键菜单、发布打包、更新检查（Gitee 优先）。
+> 文件关联 / 双击打开 / 右键菜单、发布打包、更新检查（Gitee 优先）、查找。
 
 - [x] 更新检查（轻量方案，见 §4.11）
 - [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
+- [x] 查找（编辑器 + 预览统一搜索条，见 §4.12）
 - [ ] 导出 HTML
 - [ ] 标签拖拽重排
-- [ ] 字数统计、查找替换
+- [ ] 字数统计、查找替换（替换待补）
 
 ## 8. 关键设计决策记录
 
