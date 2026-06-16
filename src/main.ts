@@ -1421,6 +1421,68 @@ window.addEventListener("beforeunload", (e) => {
   if (tabs.some(isDirty)) e.preventDefault();
 });
 
+// ---------- 外部改动检测（窗口聚焦时比对磁盘）----------
+// 运行期间别的编辑器改了已打开的文件，Dotdown 自己不会知道。窗口重新聚焦时
+// 逐个比对已打开文件的磁盘内容：干净标签静默重载；有未保存修改（冲突）则弹窗让用户选。
+let checkingExternal = false;
+
+/** 用磁盘内容重载某标签：换入新 state 并把 lastSaved 对齐磁盘（变干净）。 */
+function reloadTabFromDisk(t: Tab, disk: string) {
+  t.lastSaved = disk;
+  if (t.id === activeId) {
+    editor.setState(makeState(disk));
+    editor.dispatch({ effects: themeCompartment.reconfigure(editorThemeExt()) });
+    renderPreview();
+    updateWordCount();
+  } else {
+    t.state = makeState(disk);
+  }
+}
+
+async function checkExternalChanges() {
+  if (checkingExternal) return;
+  checkingExternal = true;
+  try {
+    syncActive();
+    let changed = false;
+    // 拷贝一份快照：await 期间标签数组可能变动（用户关标签等）
+    for (const t of [...tabs]) {
+      if (!t.path || !tabs.includes(t)) continue;
+      let disk: string;
+      try {
+        disk = await invoke<string>("read_file", { path: t.path });
+      } catch {
+        continue; // 文件被删/暂时读不到，忽略，不打扰
+      }
+      if (eol(disk) === eol(t.lastSaved)) continue; // 磁盘无外部改动
+
+      if (!isDirty(t)) {
+        reloadTabFromDisk(t, disk); // 干净标签：静默重载
+      } else {
+        const reload = await ask(
+          `「${nameOf(t)}」在外部被修改了，磁盘内容与你未保存的修改不一致。\n\n重载会放弃你的本地修改。`,
+          {
+            title: "文件已被外部修改",
+            kind: "warning",
+            okLabel: "重载（放弃本地）",
+            cancelLabel: "保留本地修改",
+          },
+        );
+        if (reload) reloadTabFromDisk(t, disk);
+        else t.lastSaved = disk; // 记下已知磁盘状态，避免每次聚焦重复弹窗
+      }
+      changed = true;
+    }
+    if (changed) {
+      renderTabs();
+      updateTitle();
+      saveSession();
+    }
+  } finally {
+    checkingExternal = false;
+  }
+}
+
 // ---------- 初始化 ----------
 async function init() {
   applyTheme();
@@ -1448,6 +1510,10 @@ async function init() {
   // 文件关联：监听二次实例转发的文件
   void listen<string>("open-file", (e) => {
     if (e.payload) void loadPath(e.payload);
+  });
+  // 窗口重新聚焦时检查已打开文件是否被外部改动（干净标签静默重载，冲突弹窗）
+  void getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+    if (focused) void checkExternalChanges();
   });
   // 本次启动若由双击/右键“用 Dotdown 打开”带入文件，打开它
   try {
