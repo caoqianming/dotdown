@@ -221,6 +221,34 @@ body {
   color: var(--accent);
 }
 
+/* 通用紧凑下拉（导出菜单等）：单行项 */
+.recent-menu.menu-compact {
+  min-width: 180px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none !important;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.menu-item:hover {
+  background: var(--hover);
+  color: var(--text) !important;
+}
+.menu-key {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* 视图切换：分段控件（编辑 / 分栏 / 预览） */
 .view-modes {
   gap: 2px;
@@ -291,6 +319,14 @@ body {
 .tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 拖拽重排：被拖标签半透明，落点标签左缘高亮 */
+.tab.dragging {
+  opacity: 0.45;
+}
+.tab.drop-target {
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .tab-close {
@@ -547,14 +583,14 @@ body {
   border: 1px solid var(--border);
 }
 
-/* ---------- 搜索条 ---------- */
+/* ---------- 搜索 / 替换条 ---------- */
 .search-bar {
   position: absolute;
   top: 8px;
   right: 16px;
   z-index: 20;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   padding: 5px 6px;
   background: var(--bg-alt);
@@ -564,6 +600,33 @@ body {
 }
 
 .search-bar[hidden] {
+  display: none;
+}
+
+.search-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-row[hidden] {
+  display: none;
+}
+
+/* 展开/收起替换行的小三角 */
+.search-toggle {
+  align-self: center;
+  width: 20px;
+  padding: 2px 0 !important;
+  color: var(--muted);
+}
+.search-toggle[hidden] {
   display: none;
 }
 
@@ -816,6 +879,21 @@ body {
   color: #ffa657;
 }
 
+/* ---------- 状态栏（字数统计）---------- */
+.statusbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 3px 14px;
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  user-select: none;
+}
+
 /* ---------- 打印 / 导出 PDF ---------- */
 @page {
   margin: 16mm;
@@ -841,6 +919,7 @@ body {
   .pane-editor,
   .divider,
   .search-bar,
+  .statusbar,
   .modal-overlay {
     display: none !important;
   }

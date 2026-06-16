@@ -14,6 +14,20 @@
 
 ---
 
+## 2026-06-16（续）
+
+### 新功能：查找替换 + 字数统计 + 导出 HTML + 标签拖拽重排（v0.3.0）
+- **查找替换**：搜索条加三角切换 + 替换行（替换输入 + 「替换」/「全部」），`Ctrl+H` 展开。
+  复用 `@codemirror/search` 的 `replaceNext`/`replaceAll`（设置含 `replace` 字段的 `SearchQuery`）。
+  仅编辑器有效，预览模式隐藏替换。详见 `design.md §4.15`。
+- **字数统计**：底部状态栏实时显示「字数 · 字符 · 行」，有选区追加「已选 N 字」。CJK 按字、
+  拉丁字母/数字串按词。编辑器 `updateListener`（docChanged/selectionSet）+ 切标签刷新。详见 §4.16。
+- **导出 HTML**：渲染自包含单文件（内联浅色 `EXPORT_CSS`），默认存源文件同级同名。
+  导出时 `rawImagePaths=true` 跳过 `convertFileSrc`、保留相对 `assets/…` 路径。详见 §4.17。
+- **导出菜单**：PDF / HTML 合并到工具栏「导出 ▾」下拉（复用「最近」下拉样式），`Ctrl+P` 仍直达 PDF。
+- **标签拖拽重排**：标签 `draggable`，HTML5 拖放调 `reorderTab` 重排数组并持久化。详见 §4.18。
+- 路线图 §7 余项全部完成。`tsc` ✅、`vite build` ✅。
+
 ## 2026-06-16
 
 ### 新功能：最近打开历史（v0.2.7）

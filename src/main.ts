@@ -12,7 +12,15 @@ import { basicSetup } from "codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { search, setSearchQuery, SearchQuery, findNext, findPrevious } from "@codemirror/search";
+import {
+  search,
+  setSearchQuery,
+  SearchQuery,
+  findNext,
+  findPrevious,
+  replaceNext,
+  replaceAll,
+} from "@codemirror/search";
 
 import MarkdownIt from "markdown-it";
 // @ts-expect-error: 该插件无类型声明
@@ -120,6 +128,10 @@ function resolveLocalImage(src: string): string {
   return convertFileSrc(resolvePath(base, p));
 }
 
+// 导出 HTML 时置真：保留图片原始路径（asset:// URL 换台机器打不开，
+// 相对引用 assets/… 在导出文件同级时仍可用）。
+let rawImagePaths = false;
+
 // 覆写图片渲染：本地路径经 convertFileSrc 重写，外部链接原样保留
 const defaultImageRender =
   md.renderer.rules.image ||
@@ -129,7 +141,7 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const i = token.attrIndex("src");
   if (i >= 0 && token.attrs) {
     const src = token.attrs[i][1];
-    if (!isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src);
+    if (!rawImagePaths && !isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src);
   }
   return defaultImageRender(tokens, idx, options, env, self);
 };
@@ -229,6 +241,8 @@ const onChange = EditorView.updateListener.of((u) => {
     updateTitle();
     scheduleSave();
   }
+  // 文档或选区变化都刷新字数（选区变化用于显示「已选 N 字」）
+  if (u.docChanged || u.selectionSet) updateWordCount();
 });
 
 function makeState(doc: string): EditorState {
@@ -244,6 +258,7 @@ function makeState(doc: string): EditorState {
       onChange,
       keymap.of([
         { key: "Mod-f", run: () => (openSearch(), true) },
+        { key: "Mod-h", run: () => (openSearch(true), true) },
         { key: "Mod-s", run: () => (saveFile(), true) },
         { key: "Mod-Shift-s", run: () => (saveFileAs(), true) },
         { key: "Mod-o", run: () => (openFile(), true) },
@@ -294,6 +309,19 @@ function syncActive() {
 
 // ---------- 标签栏渲染 ----------
 const tabNameEls = new Map<number, HTMLElement>();
+let dragTabId = -1;
+
+/** 把标签 srcId 移到标签 destId 之前，重排并持久化。 */
+function reorderTab(srcId: number, destId: number) {
+  if (srcId < 0 || srcId === destId) return;
+  const from = tabs.findIndex((t) => t.id === srcId);
+  if (from < 0) return;
+  const [moved] = tabs.splice(from, 1);
+  const to = tabs.findIndex((t) => t.id === destId);
+  tabs.splice(to < 0 ? tabs.length : to, 0, moved);
+  renderTabs();
+  saveSession();
+}
 
 function renderTabs() {
   tabbarEl.innerHTML = "";
@@ -303,6 +331,30 @@ function renderTabs() {
     el.className = "tab" + (t.id === activeId ? " active" : "");
     el.title = t.path ?? "未命名";
     el.addEventListener("click", () => switchTo(t.id));
+
+    // 拖拽重排标签
+    el.draggable = true;
+    el.addEventListener("dragstart", (e) => {
+      dragTabId = t.id;
+      el.classList.add("dragging");
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+    });
+    el.addEventListener("dragend", () => {
+      dragTabId = -1;
+      el.classList.remove("dragging");
+      tabbarEl.querySelectorAll(".tab.drop-target").forEach((x) => x.classList.remove("drop-target"));
+    });
+    el.addEventListener("dragover", (e) => {
+      if (dragTabId < 0 || dragTabId === t.id) return;
+      e.preventDefault();
+      el.classList.add("drop-target");
+    });
+    el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      el.classList.remove("drop-target");
+      reorderTab(dragTabId, t.id);
+    });
 
     const name = document.createElement("span");
     name.className = "tab-name";
@@ -393,6 +445,7 @@ function activate(id: number) {
   renderTabs();
   renderPreview();
   updateTitle();
+  updateWordCount();
   editor.focus();
 }
 
@@ -672,6 +725,9 @@ function toggleOutline() {
 const searchBar = document.getElementById("search-bar") as HTMLElement;
 const searchInput = document.getElementById("search-input") as HTMLInputElement;
 const searchCount = document.getElementById("search-count") as HTMLElement;
+const replaceRow = document.getElementById("replace-row") as HTMLElement;
+const replaceInput = document.getElementById("replace-input") as HTMLInputElement;
+const replaceToggle = document.getElementById("search-toggle-replace") as HTMLButtonElement;
 
 let previewHits: HTMLElement[] = [];
 let previewIdx = -1;
@@ -681,8 +737,29 @@ function searchTarget(): "editor" | "preview" {
   return appEl.classList.contains("mode-preview") ? "preview" : "editor";
 }
 
-function openSearch() {
+/** 当前查询：附带替换串，供 replaceNext/replaceAll 使用。 */
+function searchQuery(): SearchQuery {
+  return new SearchQuery({ search: searchInput.value, replace: replaceInput.value });
+}
+
+/** 展开/收起替换行；替换仅对编辑器有效，预览模式下隐藏整块。 */
+function setReplaceOpen(open: boolean) {
+  replaceRow.hidden = !open;
+  replaceToggle.textContent = open ? "▾" : "▸";
+  replaceToggle.classList.toggle("open", open);
+}
+
+/** 预览模式无法替换：隐藏替换切换与替换行。 */
+function updateReplaceAvailability() {
+  const preview = searchTarget() === "preview";
+  replaceToggle.hidden = preview;
+  if (preview) replaceRow.hidden = true;
+}
+
+function openSearch(withReplace = false) {
   searchBar.hidden = false;
+  updateReplaceAvailability();
+  if (withReplace && searchTarget() === "editor") setReplaceOpen(true);
   searchInput.focus();
   searchInput.select();
   runSearch();
@@ -698,16 +775,33 @@ function closeSearch() {
 /** 输入变化时执行：按当前目标分派到编辑器或预览。 */
 function runSearch() {
   if (searchBar.hidden) return;
+  updateReplaceAvailability();
   const q = searchInput.value;
   if (searchTarget() === "preview") {
     editor.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: "" })) });
     highlightPreview(q);
   } else {
     clearPreviewHighlights();
-    editor.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: q })) });
+    editor.dispatch({ effects: setSearchQuery.of(searchQuery()) });
     if (q) findNext(editor);
     updateCount();
   }
+}
+
+/** 替换当前匹配（仅编辑器）。 */
+function replaceOne() {
+  if (searchTarget() !== "editor" || !searchInput.value) return;
+  editor.dispatch({ effects: setSearchQuery.of(searchQuery()) });
+  replaceNext(editor);
+  updateCount();
+}
+
+/** 替换全部匹配（仅编辑器）。 */
+function replaceAllMatches() {
+  if (searchTarget() !== "editor" || !searchInput.value) return;
+  editor.dispatch({ effects: setSearchQuery.of(searchQuery()) });
+  replaceAll(editor);
+  updateCount();
 }
 
 function searchNext() {
@@ -821,6 +915,101 @@ function updateCount() {
     while (!cursor.next().done) count++;
   }
   searchCount.textContent = count ? `${count} 处` : "无结果";
+}
+
+// ---------- 字数统计（状态栏）----------
+const statusWordsEl = document.getElementById("status-words") as HTMLElement;
+
+/** 统计字数：CJK 字符按字计，连续的字母/数字串算一个词。 */
+function countWords(text: string): number {
+  const cjk = (text.match(/[㐀-鿿぀-ヿ가-힯]/g) ?? []).length;
+  const words = (text.match(/[A-Za-z0-9À-ɏ]+/g) ?? []).length;
+  return cjk + words;
+}
+
+/** 刷新底部状态栏：字数 / 字符 / 行；有选区时额外显示已选字数。 */
+function updateWordCount() {
+  const doc = editor.state.doc;
+  const text = doc.toString();
+  const chars = text.replace(/\r?\n/g, "").length;
+  let s = `字数 ${countWords(text)} · 字符 ${chars} · 行 ${doc.lines}`;
+  const sel = editor.state.selection.main;
+  if (!sel.empty) {
+    const picked = editor.state.sliceDoc(sel.from, sel.to);
+    s += ` · 已选 ${countWords(picked)} 字`;
+  }
+  statusWordsEl.textContent = s;
+}
+
+// ---------- 导出 HTML（自包含单文件）----------
+// 内联一套浅色 markdown 样式（不随应用主题），换台机器/浏览器打开也好看。
+const EXPORT_CSS = `
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:#24292f;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,sans-serif;font-size:16px;line-height:1.7}
+.markdown-body{max-width:860px;margin:0 auto;padding:40px 24px}
+.markdown-body h1,.markdown-body h2{border-bottom:1px solid #e2e4e8;padding-bottom:.3em}
+.markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4{margin-top:1.4em;margin-bottom:.6em;font-weight:600;line-height:1.3}
+.markdown-body h1{font-size:1.9em}.markdown-body h2{font-size:1.5em}.markdown-body h3{font-size:1.25em}
+.markdown-body p,.markdown-body ul,.markdown-body ol{margin:.6em 0}
+.markdown-body a{color:#1a56db;text-decoration:none}.markdown-body a:hover{text-decoration:underline}
+.markdown-body code{background:#f3f4f6;padding:.15em .4em;border-radius:4px;font-family:"Cascadia Code",Consolas,monospace;font-size:.88em}
+.markdown-body pre{background:#0d1117;color:#e6edf3;padding:14px 16px;border-radius:8px;overflow:auto}
+.markdown-body pre code{background:none;padding:0;color:inherit;font-size:.85em}
+.markdown-body blockquote{margin:.8em 0;padding:.2em 1em;color:#6b7280;border-left:4px solid #e2e4e8;background:#f6f7f9}
+.markdown-body table{border-collapse:collapse;margin:.8em 0}
+.markdown-body th,.markdown-body td{border:1px solid #e2e4e8;padding:6px 13px}
+.markdown-body th{background:#f6f7f9}
+.markdown-body img{max-width:100%;border-radius:6px}
+.markdown-body hr{border:none;border-top:1px solid #e2e4e8;margin:1.5em 0}
+.markdown-body ul.contains-task-list{list-style:none;padding-left:1.2em}
+.markdown-body .task-list-item-checkbox{margin-right:.5em}
+.hljs-comment,.hljs-quote{color:#8b949e}
+.hljs-keyword,.hljs-selector-tag{color:#ff7b72}
+.hljs-string,.hljs-attr{color:#a5d6ff}
+.hljs-number,.hljs-literal{color:#79c0ff}
+.hljs-title,.hljs-section{color:#d2a8ff}
+.hljs-built_in,.hljs-type{color:#ffa657}
+`;
+
+/** 渲染当前文档为自包含 HTML 文档字符串（图片保留原始路径）。 */
+function buildExportHtml(title: string): string {
+  rawImagePaths = true;
+  let body: string;
+  try {
+    body = md.render(editor.state.doc.toString());
+  } finally {
+    rawImagePaths = false;
+  }
+  const safeTitle = md.utils.escapeHtml(title);
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${safeTitle}</title>
+<style>${EXPORT_CSS}</style>
+</head>
+<body>
+<article class="markdown-body">
+${body}</article>
+</body>
+</html>
+`;
+}
+
+async function exportHtml() {
+  const t = activeTab();
+  const stem = t && t.path ? nameOf(t).replace(/\.[^.]+$/, "") : "未命名";
+  const path = await save({
+    defaultPath: t?.path ? `${dirOf(t.path)}${t.path.includes("\\") ? "\\" : "/"}${stem}.html` : `${stem}.html`,
+    filters: [{ name: "HTML", extensions: ["html", "htm"] }],
+  });
+  if (!path) return;
+  try {
+    await invoke("write_file", { path, content: buildExportHtml(stem) });
+  } catch (e) {
+    await message(String(e), { title: "导出 HTML 失败", kind: "error" });
+  }
 }
 
 // ---------- 关于 / 帮助 弹窗 ----------
@@ -1118,13 +1307,31 @@ recentBtn.addEventListener("click", (e) => {
   if (recentMenu.hidden) openRecent();
   else closeRecent();
 });
-// 点击菜单外、或按 Esc 关闭
+
+// ---------- 导出下拉菜单（PDF / HTML）----------
+const exportBtn = document.getElementById("btn-export") as HTMLButtonElement;
+const exportMenu = document.getElementById("export-menu") as HTMLElement;
+
+function closeExportMenu() {
+  exportMenu.hidden = true;
+}
+exportBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  exportMenu.hidden = !exportMenu.hidden;
+});
+
+// 点击菜单外、或按 Esc 关闭（最近 / 导出 两个下拉）
 document.addEventListener("click", (e) => {
-  if (!recentMenu.hidden && !recentMenu.contains(e.target as Node) && !recentBtn.contains(e.target as Node))
+  const target = e.target as Node;
+  if (!recentMenu.hidden && !recentMenu.contains(target) && !recentBtn.contains(target))
     closeRecent();
+  if (!exportMenu.hidden && !exportMenu.contains(target) && !exportBtn.contains(target))
+    closeExportMenu();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !recentMenu.hidden) closeRecent();
+  if (e.key !== "Escape") return;
+  if (!recentMenu.hidden) closeRecent();
+  if (!exportMenu.hidden) closeExportMenu();
 });
 
 // ---------- 事件绑定 ----------
@@ -1132,8 +1339,15 @@ document.getElementById("btn-new")!.addEventListener("click", () => newBlankDoc(
 document.getElementById("btn-open")!.addEventListener("click", openFile);
 document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
-document.getElementById("btn-pdf")!.addEventListener("click", exportPdf);
-document.getElementById("btn-search")!.addEventListener("click", openSearch);
+document.getElementById("btn-pdf")!.addEventListener("click", () => {
+  closeExportMenu();
+  exportPdf();
+});
+document.getElementById("btn-html")!.addEventListener("click", () => {
+  closeExportMenu();
+  void exportHtml();
+});
+document.getElementById("btn-search")!.addEventListener("click", () => openSearch());
 document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
 document.getElementById("btn-outline")!.addEventListener("click", toggleOutline);
 document.getElementById("btn-about")!.addEventListener("click", openAbout);
@@ -1150,6 +1364,19 @@ document.addEventListener("keydown", (e) => {
 document.getElementById("search-next")!.addEventListener("click", searchNext);
 document.getElementById("search-prev")!.addEventListener("click", searchPrev);
 document.getElementById("search-close")!.addEventListener("click", closeSearch);
+document.getElementById("replace-one")!.addEventListener("click", replaceOne);
+document.getElementById("replace-all")!.addEventListener("click", replaceAllMatches);
+replaceToggle.addEventListener("click", () => setReplaceOpen(replaceRow.hidden));
+replaceInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (e.shiftKey) replaceAllMatches();
+    else replaceOne();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeSearch();
+  }
+});
 searchInput.addEventListener("input", runSearch);
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -1166,6 +1393,9 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
     e.preventDefault();
     openSearch();
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H")) {
+    e.preventDefault();
+    openSearch(true);
   }
 });
 document
