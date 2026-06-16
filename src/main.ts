@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { open, save, message, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -72,6 +72,67 @@ const md = new MarkdownIt({
     return md.utils.escapeHtml(code);
   },
 }).use(taskLists, { enabled: true, label: true });
+
+// ---------- 图片路径解析 ----------
+/** 网络/数据 URI 等外部来源：原样输出，不当作本地文件处理。 */
+function isExternalSrc(src: string): boolean {
+  return /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(src) && !/^[a-z]:[\\/]/i.test(src);
+}
+
+/** Windows 盘符路径或 POSIX 绝对路径。 */
+function isAbsolutePath(p: string): boolean {
+  return /^[a-z]:[\\/]/i.test(p) || p.startsWith("\\\\") || p.startsWith("/");
+}
+
+/** 取路径所在目录（兼容 \\ 与 /）。 */
+function dirOf(p: string): string {
+  const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return i >= 0 ? p.slice(0, i) : "";
+}
+
+/** 以 baseDir 为基准解析相对路径，归一 . 与 ..，保留原平台分隔符。 */
+function resolvePath(baseDir: string, rel: string): string {
+  const sep = baseDir.includes("\\") ? "\\" : "/";
+  const parts = (baseDir + "/" + rel).split(/[\\/]+/);
+  const out: string[] = [];
+  for (const part of parts) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      if (out.length && out[out.length - 1] !== "..") out.pop();
+      continue;
+    }
+    out.push(part);
+  }
+  return out.join(sep);
+}
+
+/** 把 Markdown 里的本地图片 src 转成 WebView 可加载的 asset:// URL。 */
+function resolveLocalImage(src: string): string {
+  let p = src;
+  try {
+    p = decodeURI(src);
+  } catch {
+    /* 非法转义就用原串 */
+  }
+  if (isAbsolutePath(p)) return convertFileSrc(p);
+  const base = activeTab()?.path ? dirOf(activeTab()!.path!) : "";
+  if (!base) return src; // 未保存的新文档无目录，无法定位相对路径
+  return convertFileSrc(resolvePath(base, p));
+}
+
+// 覆写图片渲染：本地路径经 convertFileSrc 重写，外部链接原样保留
+const defaultImageRender =
+  md.renderer.rules.image ||
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const i = token.attrIndex("src");
+  if (i >= 0 && token.attrs) {
+    const src = token.attrs[i][1];
+    if (!isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src);
+  }
+  return defaultImageRender(tokens, idx, options, env, self);
+};
 
 // ---------- 标签数据模型 ----------
 interface Tab {
@@ -442,6 +503,102 @@ async function writeTo(t: Tab, path: string) {
     await message(String(e), { title: "保存失败", kind: "error" });
   }
 }
+
+// ---------- 图片插入（粘贴 / 拖入）----------
+const IMG_MIME_EXT: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/bmp": "bmp",
+  "image/svg+xml": "svg",
+};
+const IMG_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+let imgSeq = 0;
+
+/** 在光标处插入文本，并把光标移到插入内容之后。 */
+function insertAtCursor(text: string) {
+  const { from, to } = editor.state.selection.main;
+  editor.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor: from + text.length },
+  });
+  editor.focus();
+}
+
+function baseNameOf(p: string): string {
+  const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return i >= 0 ? p.slice(i + 1) : p;
+}
+
+/** 预览模式下看不到编辑器，插入图片后切到分栏以便确认。 */
+function ensureVisibleForEdit() {
+  if (appEl.classList.contains("mode-preview")) setMode("split");
+}
+
+/**
+ * 把粘贴的图片字节落到文档同级 assets/ 并插入相对引用。
+ * 文档尚未保存（无路径）时退回内联 base64，保证仍能显示。
+ */
+async function insertPastedImage(bytes: Uint8Array, mime: string) {
+  // 未保存文档没有同级目录可放 assets/——先让用户保存，避免退回臃肿的内联 base64
+  if (!activeTab()?.path) {
+    await message("粘贴图片前请先保存文档：图片会存到文档同级 assets/ 目录。", {
+      title: "请先保存文档",
+      kind: "info",
+    });
+    await saveFileAs();
+  }
+  const path = activeTab()?.path;
+  if (!path) return; // 用户取消保存，放弃插入（不再吐 base64）
+  const dir = dirOf(path);
+  const sep = dir.includes("\\") ? "\\" : "/";
+  const ext = IMG_MIME_EXT[mime] ?? "png";
+  const name = `image-${Date.now()}-${++imgSeq}.${ext}`;
+  try {
+    await invoke("write_bytes", { path: `${dir}${sep}assets${sep}${name}`, bytes: Array.from(bytes) });
+    insertAtCursor(`![](assets/${name})`);
+  } catch (e) {
+    await message(String(e), { title: "图片保存失败", kind: "error" });
+  }
+}
+
+/** 把拖入的图片文件复制到文档同级 assets/ 并插入相对引用；无文档路径则引用原始绝对路径。 */
+async function insertDroppedImage(srcPath: string) {
+  const t = activeTab();
+  const name = baseNameOf(srcPath);
+  ensureVisibleForEdit();
+  if (t?.path) {
+    const dir = dirOf(t.path);
+    const sep = dir.includes("\\") ? "\\" : "/";
+    try {
+      await invoke("copy_file", { src: srcPath, dest: `${dir}${sep}assets${sep}${name}` });
+      insertAtCursor(`![](assets/${name})`);
+    } catch (e) {
+      await message(String(e), { title: "图片导入失败", kind: "error" });
+    }
+  } else {
+    insertAtCursor(`![](${srcPath.replace(/\\/g, "/")})`);
+  }
+}
+
+// 粘贴图片：拦截剪贴板里的图片，落盘并插入引用
+editor.dom.addEventListener("paste", (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.kind === "file" && it.type.startsWith("image/")) {
+      const file = it.getAsFile();
+      if (!file) continue;
+      e.preventDefault();
+      void (async () => {
+        await insertPastedImage(new Uint8Array(await file.arrayBuffer()), file.type);
+      })();
+      return;
+    }
+  }
+});
 
 // ---------- 视图模式 ----------
 type ViewMode = "editor" | "split" | "preview";
@@ -911,12 +1068,12 @@ document
     ),
   );
 
-// 拖拽 .md 文件到窗口即打开（每个文件一个标签）
+// 拖拽到窗口：.md 文件新开标签；图片文件插入当前文档
 getCurrentWebview().onDragDropEvent(async (event) => {
-  if (event.payload.type === "drop") {
-    for (const p of event.payload.paths) {
-      if (/\.(md|markdown|mdown|txt)$/i.test(p)) await loadPath(p);
-    }
+  if (event.payload.type !== "drop") return;
+  for (const p of event.payload.paths) {
+    if (/\.(md|markdown|mdown|txt)$/i.test(p)) await loadPath(p);
+    else if (IMG_EXT_RE.test(p)) await insertDroppedImage(p);
   }
 });
 

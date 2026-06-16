@@ -224,6 +224,28 @@ interface PersistedTab {
 **交互**：输入即时搜索；`Enter`/`Shift+Enter` 下一个/上一个；`Esc` 关闭。打印时
 `.search-bar` 一并隐藏。
 
+### 4.13 图片（显示 + 粘贴/拖入，v0.2.6）
+
+**本地图片显示**：WebView 出于安全不直接加载 `file://`，故覆写 markdown-it 的 `image`
+渲染规则——对**本地**路径用 `convertFileSrc` 重写成 asset 协议 URL（Windows 上为
+`http://asset.localhost/…`）。判定「外部来源」（`http(s):`/`data:`/`//` 等）原样保留，
+不与 `C:/…` 盘符路径混淆。相对路径以**当前标签文件所在目录**为基准解析（`resolvePath`
+归一 `.`/`..`，跟随原平台分隔符）；未保存的新文档无目录，相对路径无法定位故原样输出。
+需在 `tauri.conf.json` 开 `app.security.assetProtocol`（`enable: true`、`scope: ["**"]`），
+并给 `tauri` crate 加 `protocol-asset` feature，否则构建报「allowlist 不匹配」。
+
+**粘贴**：编辑器 DOM 监听 `paste`，剪贴板项含 `image/*` 文件时 `preventDefault`，读
+`arrayBuffer` 落盘到文档同级 `assets/image-<ts>-<seq>.<ext>`（扩展名由 MIME 映射），插入
+`![](assets/…)`。**未保存文档没有同级目录可放 `assets/`**，故先提示并走「另存为」确定落点，
+保存后再写入；用户取消保存则放弃插入——不退回内联 base64（会把图片整段塞进 `.md`、撑大文件）。
+
+**拖入**：扩展 `onDragDropEvent`——`.md/.txt` 等仍新开标签，图片文件则复制到 `assets/`
+并插入相对引用；无文档路径时引用原始绝对路径（可显示但不便携）。预览模式下插入会先切到
+分栏（`ensureVisibleForEdit`）以便确认。
+
+**Rust 侧**：新增 `write_bytes(path, Vec<u8>)`（粘贴字节落盘）与 `copy_file(src, dest)`
+（拖入文件复制），与 `write_file` 共用 `ensure_parent` 递归建目录。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -255,6 +277,7 @@ interface PersistedTab {
 - [x] 更新检查（轻量方案，见 §4.11）
 - [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
 - [x] 查找（编辑器 + 预览统一搜索条，见 §4.12）
+- [x] 图片：本地显示 + 粘贴/拖入落盘（见 §4.13）
 - [ ] 导出 HTML
 - [ ] 标签拖拽重排
 - [ ] 字数统计、查找替换（替换待补）

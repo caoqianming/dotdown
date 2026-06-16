@@ -12,12 +12,34 @@ fn read_file(path: String) -> Result<String, String> {
 /// 把内容写入磁盘文件（覆盖写入）。
 #[tauri::command]
 fn write_file(path: String, content: String) -> Result<(), String> {
-    if let Some(parent) = Path::new(&path).parent() {
+    ensure_parent(&path)?;
+    fs::write(&path, content).map_err(|e| format!("写入失败: {e}"))
+}
+
+/// 把二进制数据写入磁盘文件（用于粘贴的图片）。
+#[tauri::command]
+fn write_bytes(path: String, bytes: Vec<u8>) -> Result<(), String> {
+    ensure_parent(&path)?;
+    fs::write(&path, bytes).map_err(|e| format!("写入失败: {e}"))
+}
+
+/// 复制文件到目标路径（用于拖入的图片落盘到文档同目录）。
+#[tauri::command]
+fn copy_file(src: String, dest: String) -> Result<(), String> {
+    ensure_parent(&dest)?;
+    fs::copy(&src, &dest)
+        .map(|_| ())
+        .map_err(|e| format!("复制失败: {e}"))
+}
+
+/// 确保目标路径的父目录存在（不存在则递归创建）。
+fn ensure_parent(path: &str) -> Result<(), String> {
+    if let Some(parent) = Path::new(path).parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
         }
     }
-    fs::write(&path, content).map_err(|e| format!("写入失败: {e}"))
+    Ok(())
 }
 
 /// 启动参数里携带的待打开文件（双击/右键“用 Dotdown 打开”时传入）。
@@ -89,6 +111,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_file,
             write_file,
+            write_bytes,
+            copy_file,
             initial_file,
             fix_webview_paint
         ])
