@@ -16,6 +16,11 @@
 
 ## 2026-06-16（续）
 
+### 已发布：v0.3.0 双平台
+- 打 tag `v0.3.0`，源码 + tag 推 GitHub 与 Gitee；两边各建 Release 并上传
+  `Dotdown_0.3.0_x64-setup.exe`（NSIS 2.8MB）与免安装 `dotdown.exe`（9.8MB）。
+- 下午 Gitee 网络正常，二进制经 API v5 上传成功（token 放 URL 查询串）。
+
 ### 新功能：查找替换 + 字数统计 + 导出 HTML + 标签拖拽重排（v0.3.0）
 - **查找替换**：搜索条加三角切换 + 替换行（替换输入 + 「替换」/「全部」），`Ctrl+H` 展开。
   复用 `@codemirror/search` 的 `replaceNext`/`replaceAll`（设置含 `replace` 字段的 `SearchQuery`）。
