@@ -7,6 +7,8 @@
   --accent: #2563eb;
   --code-bg: #f3f4f6;
   --hover: #eceef1;
+  --active: #e0e7ff;
+  --shadow: 0 6px 24px rgba(17, 24, 39, 0.12), 0 2px 6px rgba(17, 24, 39, 0.06);
   font-family: -apple-system, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
   font-size: 14px;
   color: var(--text);
@@ -20,11 +22,54 @@
   --muted: #9aa0a6;
   --accent: #4f9cff;
   --code-bg: #2d2d2d;
-  --hover: #2a2d2e;
+  --hover: #2f3133;
+  --active: #2b3a55;
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* 统一交互过渡与键盘可见焦点 */
+button {
+  font-family: inherit;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* 细滚动条（WebView2 为 Chromium，支持 ::-webkit-scrollbar） */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 3px solid transparent;
+  border-radius: 7px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 html,
@@ -47,8 +92,8 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 7px 12px;
   background: var(--bg-alt);
   border-bottom: 1px solid var(--border);
   user-select: none;
@@ -57,7 +102,17 @@ body {
 
 .toolbar .group {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 分组间细分隔线（标题两侧的居中组不画） */
+.toolbar .group:not(:first-child):not(.view-modes)::before {
+  content: "";
+  align-self: stretch;
+  width: 1px;
+  margin: 3px 8px 3px 0;
+  background: var(--border);
 }
 
 .toolbar .title {
@@ -70,19 +125,24 @@ body {
   text-overflow: ellipsis;
 }
 
+/* 幽灵按钮：默认无边框，悬停浮起底色，更克制 */
 .toolbar button {
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text);
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 5px 11px;
+  border-radius: 7px;
   cursor: pointer;
   font-size: 13px;
+  line-height: 1.4;
 }
 
 .toolbar button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--hover);
+}
+
+.toolbar button:active {
+  background: var(--active);
 }
 
 /* 最近打开下拉 */
@@ -101,8 +161,8 @@ body {
   padding: 4px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
   z-index: 200;
 }
 .recent-empty {
@@ -161,10 +221,28 @@ body {
   color: var(--accent);
 }
 
+/* 视图切换：分段控件（编辑 / 分栏 / 预览） */
+.view-modes {
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.view-modes button {
+  padding: 4px 12px;
+  border-radius: 7px;
+}
+.view-modes button:hover {
+  background: var(--hover);
+}
 .view-modes button.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: transparent;
   color: #fff;
+}
+.view-modes button.active:hover {
+  background: var(--accent);
 }
 
 /* ---------- 标签栏 ---------- */
@@ -194,10 +272,14 @@ body {
   color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .tab:hover {
   background: var(--hover);
+  color: var(--text);
 }
 
 .tab.active {
@@ -243,17 +325,21 @@ body {
   color: var(--accent);
 }
 
-/* ---------- 图标按钮（主题 / 大纲）---------- */
+/* ---------- 图标按钮（大纲 / 查找 / 主题 / 关于）---------- */
+#btn-outline,
+#btn-search,
 #btn-theme,
-#btn-outline {
+#btn-about {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 6px 8px;
 }
 
+#btn-outline svg,
+#btn-search svg,
 #btn-theme svg,
-#btn-outline svg {
+#btn-about svg {
   display: block;
 }
 
@@ -291,6 +377,9 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   border-radius: 0;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .outline-item:hover {
@@ -328,9 +417,9 @@ body {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 24px 28px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow);
 }
 
 .modal-close {
@@ -470,8 +559,8 @@ body {
   padding: 5px 6px;
   background: var(--bg-alt);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
 }
 
 .search-bar[hidden] {
@@ -683,6 +772,7 @@ body {
 
 .markdown-body img {
   max-width: 100%;
+  border-radius: 6px;
 }
 
 .markdown-body hr {
