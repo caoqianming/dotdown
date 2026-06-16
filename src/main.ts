@@ -462,13 +462,16 @@ async function loadPath(path: string) {
   if (existing) {
     switchTo(existing.id);
     setMode("split"); // 打开文件即切到分栏，方便边看边改
+    pushRecent(path);
     return;
   }
   try {
     const content = await invoke<string>("read_file", { path });
     newTab(path, content);
     setMode("split");
+    pushRecent(path);
   } catch (e) {
+    removeRecent(path); // 文件已不存在/打不开，从历史移除
     await message(String(e), { title: "打开失败", kind: "error" });
   }
 }
@@ -496,6 +499,7 @@ async function writeTo(t: Tab, path: string) {
     await invoke("write_file", { path, content });
     t.path = path;
     t.lastSaved = content;
+    pushRecent(path);
     renderTabs();
     updateTitle();
     saveSession();
@@ -1018,6 +1022,110 @@ async function restoreSession(): Promise<boolean> {
   saveSession();
   return true;
 }
+
+// ---------- 最近打开历史 ----------
+// 记录已存盘文件的路径，供「最近」下拉一键重开。仅存路径（不存内容），
+// 与会话恢复正交：会话恢复上次的标签，历史是所有近期打开过的文件。
+const RECENT_KEY = "dotdown.recent";
+const RECENT_MAX = 15;
+
+interface RecentItem {
+  path: string;
+  name: string;
+  ts: number;
+}
+
+function loadRecent(): RecentItem[] {
+  try {
+    const arr = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(arr) ? arr.filter((x) => x && typeof x.path === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(items: RecentItem[]) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(items));
+  } catch {
+    /* 配额/隐私模式失败时忽略 */
+  }
+}
+
+/** 记录一次打开/保存：去重置顶、限长。 */
+function pushRecent(path: string) {
+  const items = loadRecent().filter((x) => x.path !== path);
+  items.unshift({ path, name: baseNameOf(path), ts: Date.now() });
+  saveRecent(items.slice(0, RECENT_MAX));
+}
+
+function removeRecent(path: string) {
+  saveRecent(loadRecent().filter((x) => x.path !== path));
+}
+
+const recentBtn = document.getElementById("btn-recent") as HTMLButtonElement;
+const recentMenu = document.getElementById("recent-menu") as HTMLElement;
+
+function renderRecentMenu() {
+  recentMenu.innerHTML = "";
+  const items = loadRecent();
+  if (items.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "recent-empty";
+    empty.textContent = "暂无最近打开的文件";
+    recentMenu.appendChild(empty);
+    return;
+  }
+  for (const it of items) {
+    const row = document.createElement("button");
+    row.className = "recent-item";
+    row.title = it.path;
+    const name = document.createElement("span");
+    name.className = "recent-name";
+    name.textContent = it.name;
+    const path = document.createElement("span");
+    path.className = "recent-path";
+    path.textContent = it.path;
+    row.append(name, path);
+    row.addEventListener("click", () => {
+      closeRecent();
+      void loadPath(it.path);
+    });
+    recentMenu.appendChild(row);
+  }
+  const foot = document.createElement("div");
+  foot.className = "recent-foot";
+  const clear = document.createElement("button");
+  clear.textContent = "清空历史";
+  clear.addEventListener("click", () => {
+    saveRecent([]);
+    renderRecentMenu();
+  });
+  foot.appendChild(clear);
+  recentMenu.appendChild(foot);
+}
+
+function openRecent() {
+  renderRecentMenu();
+  recentMenu.hidden = false;
+}
+function closeRecent() {
+  recentMenu.hidden = true;
+}
+
+recentBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (recentMenu.hidden) openRecent();
+  else closeRecent();
+});
+// 点击菜单外、或按 Esc 关闭
+document.addEventListener("click", (e) => {
+  if (!recentMenu.hidden && !recentMenu.contains(e.target as Node) && !recentBtn.contains(e.target as Node))
+    closeRecent();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !recentMenu.hidden) closeRecent();
+});
 
 // ---------- 事件绑定 ----------
 document.getElementById("btn-new")!.addEventListener("click", () => newBlankDoc());

@@ -246,6 +246,18 @@ interface PersistedTab {
 **Rust 侧**：新增 `write_bytes(path, Vec<u8>)`（粘贴字节落盘）与 `copy_file(src, dest)`
 （拖入文件复制），与 `write_file` 共用 `ensure_parent` 递归建目录。
 
+### 4.14 最近打开历史（v0.2.7）
+
+工具栏「最近 ▾」下拉,列出近期打开/保存过的**已存盘文件**,点击经 `loadPath` 一键重开。
+
+- **存储**：`localStorage` 键 `dotdown.recent`,数组 `{ path, name, ts }`,去重置顶、限长
+  `RECENT_MAX=15`。只存路径不存内容,与**会话恢复**正交——会话恢复的是「上次关窗时开着的标签」,
+  历史是「所有近期碰过的文件」。
+- **记录时机**：`loadPath` 成功(含已打开标签的切换)与 `writeTo` 保存成功时 `pushRecent`;
+  `loadPath` 读取失败时 `removeRecent`,自动剔除已删除/失效的条目。
+- **交互**：点按钮开合;点菜单外或按 `Esc` 关闭;底部「清空历史」清空。条目显示文件名(粗)
+  + 完整路径(灰,过长省略,`title` 悬浮看全路径)。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |

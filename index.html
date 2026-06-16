@@ -29,6 +29,10 @@
         <div class="group">
           <button id="btn-new" title="新建 (Ctrl+N)">新建</button>
           <button id="btn-open" title="打开 (Ctrl+O)">打开</button>
+          <div class="recent-wrap">
+            <button id="btn-recent" title="最近打开">最近 ▾</button>
+            <div id="recent-menu" class="recent-menu" hidden></div>
+          </div>
           <button id="btn-save" title="保存 (Ctrl+S)">保存</button>
           <button id="btn-saveas" title="另存为 (Ctrl+Shift+S)">另存为</button>
           <button id="btn-pdf" title="导出 PDF (Ctrl+P)">导出PDF</button>
@@ -93,6 +97,7 @@
           <li><b>分栏编辑</b>：左侧源码（CodeMirror）+ 右侧实时预览（markdown-it）</li>
           <li><b>多标签页</b>：并行打开多个文档，按路径去重，未保存以 ● 标记</li>
           <li><b>会话恢复</b>：重启自动还原上次打开的标签</li>
+          <li><b>最近打开</b>：工具栏「最近」下拉一键重开近期文件</li>
           <li><b>大纲侧栏</b>：标题目录，点击平滑跳转</li>
           <li><b>深色模式</b>：浅色 / 深色 / 跟随系统三态切换</li>
           <li><b>视图切换</b>：编辑 / 分栏 / 预览；编辑器 → 预览滚动同步</li>
