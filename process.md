@@ -14,6 +14,13 @@
 
 ---
 
+## 2026-06-17
+
+### 已发布：v0.3.1（GitHub）
+- 打 tag `v0.3.1`，源码 + tag 推 GitHub；`tauri build` 出 `Dotdown_0.3.1_x64-setup.exe`（NSIS 2.8MB）
+  与免安装 `dotdown.exe`（9.8MB），经 REST API 建 Release 并上传两资产。
+- Gitee 留待下午网络恢复再补（上午连不上）。
+
 ## 2026-06-16（再续）
 
 ### 新功能：分栏宽度可拖动（v0.3.1）
