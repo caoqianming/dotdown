@@ -313,6 +313,15 @@ interface PersistedTab {
 （`[...tabs]`）避免 await 期间数组变动；文件读不到（被删/占用）则忽略不打扰。与**会话恢复**
 互补——会话恢复在启动时重读干净文件，本机制覆盖运行期间的外部改动。
 
+### 4.20 分栏宽度可拖动（v0.3.1）
+
+分栏模式下两栏宽度由 `.panes` 上的 `--ed` / `--pv` 两个 flex-grow 变量按比例分配（默认各 1，
+即 50/50）。原先 `width:0` 的 `.divider` 改成 6px 可见手柄（`cursor: col-resize`，hover/拖动高亮），
+仅 `.mode-split` 显示。拖动逻辑：`mousedown` 时记下编辑器左缘→预览右缘的固定区间，`mousemove`
+按 `(clientX - left) / span` 算编辑器占比并 `applySplit`（夹在 0.15~0.85）；`mouseup` 把占比写
+`localStorage`（`dotdown.split`）。拖动期间 `body.is-resizing` 全局禁选 + 统一光标，松手后
+`forceRepaint()` 兜底 WebView2 偶发不重绘。双击中线恢复 50/50。启动时 `init` 读回上次比例。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -353,6 +362,7 @@ interface PersistedTab {
 - [x] 导出 HTML（自包含单文件，见 §4.17）
 - [x] 标签拖拽重排（见 §4.18）
 - [x] 外部改动检测（聚焦时重载，见 §4.19）
+- [x] 分栏宽度可拖动（拖中线调左右宽度，见 §4.20）
 - [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义
 
 ## 8. 关键设计决策记录

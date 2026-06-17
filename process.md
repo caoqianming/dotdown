@@ -16,6 +16,11 @@
 
 ## 2026-06-16（再续）
 
+### 新功能：分栏宽度可拖动（v0.3.1）
+- 分栏模式下拖动中线即可调左右宽度：`.divider` 由隐形改成 6px 可见手柄（`col-resize`、hover/拖动高亮，仅分栏显示）。
+- 两栏宽度改由 `.panes` 的 `--ed` / `--pv`（flex-grow）按比例分配；拖动算占比（夹 0.15~0.85）、存 `localStorage`（`dotdown.split`），重启沿用；双击中线恢复 50/50。
+- 拖动期 `body.is-resizing` 全局禁选，松手 `forceRepaint` 兜底重绘。详见 `design.md §4.20`。
+
 ### 新功能：外部改动检测（v0.3.1）
 - 运行期间别的编辑器改了已打开文件，Dotdown 现在能感知了：监听窗口 `onFocusChanged`，
   **重新聚焦时** `checkExternalChanges()` 逐个比对已打开文件的磁盘内容。

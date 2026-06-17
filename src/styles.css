@@ -708,8 +708,26 @@ body {
   border-right: 1px solid var(--border);
 }
 
+/* 分栏中线：可拖动调整左右宽度（仅分栏模式可见） */
 .divider {
-  width: 0;
+  flex: 0 0 6px;
+  cursor: col-resize;
+  background: var(--border);
+  transition: background 0.12s;
+}
+.divider:hover,
+.divider.dragging {
+  background: var(--accent);
+}
+/* 仅分栏模式显示中线；其余模式只剩单栏，无需中线 */
+.mode-editor .divider,
+.mode-preview .divider {
+  display: none;
+}
+/* 拖动中：全局禁选 + 统一光标，避免误选文本 */
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 #editor {
@@ -735,6 +753,15 @@ body {
 }
 .mode-preview .pane-editor {
   display: none;
+}
+
+/* 分栏模式：左右宽度按 --ed / --pv 比例分配（默认各 1，即 50/50），中线代替边框 */
+.mode-split .pane-editor {
+  flex: var(--ed, 1) 1 0;
+  border-right: none;
+}
+.mode-split .pane-preview {
+  flex: var(--pv, 1) 1 0;
 }
 
 /* ---------- 预览样式（GitHub 风格简化版）---------- */

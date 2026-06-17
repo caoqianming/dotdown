@@ -677,6 +677,69 @@ function setMode(mode: ViewMode) {
   if (!searchBar.hidden) runSearch();
 }
 
+// ---------- 分栏宽度可拖动调整 ----------
+// 分栏模式下拖动中线，按比例分配编辑器/预览宽度。比例存 localStorage，重启沿用。
+const SPLIT_KEY = "dotdown.split";
+const dividerEl = document.querySelector(".divider") as HTMLElement;
+const panesEl = document.querySelector(".panes") as HTMLElement;
+
+/** 应用编辑器占比 f（0~1，夹在 0.15~0.85）：设 --ed / --pv 两个 flex-grow 变量。 */
+function applySplit(f: number) {
+  const ed = Math.min(0.85, Math.max(0.15, f));
+  panesEl.style.setProperty("--ed", String(ed));
+  panesEl.style.setProperty("--pv", String(1 - ed));
+}
+
+function readSplit(): number {
+  try {
+    const v = parseFloat(localStorage.getItem(SPLIT_KEY) ?? "");
+    if (Number.isFinite(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return 0.5;
+}
+
+dividerEl.addEventListener("mousedown", (e) => {
+  if (!appEl.classList.contains("mode-split")) return; // 仅分栏模式可拖
+  e.preventDefault();
+  const editorRect = (document.querySelector(".pane-editor") as HTMLElement).getBoundingClientRect();
+  const previewRect = (document.querySelector(".pane-preview") as HTMLElement).getBoundingClientRect();
+  // 拖动区间：编辑器左缘 → 预览右缘（两端固定，仅中线移动）
+  const left = editorRect.left;
+  const span = previewRect.right - left;
+  if (span <= 0) return;
+  dividerEl.classList.add("dragging");
+  document.body.classList.add("is-resizing");
+
+  const onMove = (ev: MouseEvent) => applySplit((ev.clientX - left) / span);
+  const onUp = () => {
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+    dividerEl.classList.remove("dragging");
+    document.body.classList.remove("is-resizing");
+    try {
+      localStorage.setItem(SPLIT_KEY, panesEl.style.getPropertyValue("--ed") || "0.5");
+    } catch {
+      /* ignore */
+    }
+    forceRepaint(); // WebView2 偶发不重绘：拖动后强制刷一次预览
+  };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+});
+
+// 双击中线：恢复 50/50
+dividerEl.addEventListener("dblclick", () => {
+  applySplit(0.5);
+  try {
+    localStorage.setItem(SPLIT_KEY, "0.5");
+  } catch {
+    /* ignore */
+  }
+  forceRepaint();
+});
+
 // ---------- 大纲侧栏 ----------
 const outlineEl = document.getElementById("outline") as HTMLElement;
 const OUTLINE_KEY = "dotdown.outline";
@@ -1486,6 +1549,7 @@ async function checkExternalChanges() {
 // ---------- 初始化 ----------
 async function init() {
   applyTheme();
+  applySplit(readSplit()); // 恢复上次的分栏宽度比例
   try {
     // 默认展开大纲；仅当用户上次显式关闭（"0"）才保持收起
     setOutline(localStorage.getItem(OUTLINE_KEY) !== "0");
