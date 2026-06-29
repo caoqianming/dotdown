@@ -14,6 +14,20 @@
 
 ---
 
+## 2026-06-29
+
+### 新功能：数学公式 + 流程图（v0.3.2）
+- **KaTeX 数学公式**：接 `@vscode/markdown-it-katex`，`$...$` 行内、`$$...$$` 块级，
+  `md.render` 阶段同步渲染；`import "katex/dist/katex.min.css"` 带样式与字体。`throwOnError:false`
+  非法公式显红字不崩。详见 `design.md §4.21`。
+- **Mermaid 流程图**：覆写 `fence` 把 ```` ```mermaid ```` 出成 `<pre class="mermaid">` 占位，
+  `renderPreview` 末尾 `runMermaid()` 异步 `mermaid.render` 取 SVG 回填。`mermaidSeq` 防快速编辑
+  竞态，`data-done` 控制渲染前隐藏/错误红字，主题随明暗切换重渲染。
+- **导出适配**：HTML 导出把 Mermaid 内联成 SVG（自包含离线可看）、含公式时加 KaTeX CDN 样式；
+  PDF 导出在深色+有图表时临时转浅色重渲染再打印。欢迎文档加了公式/流程图示例。
+- 依赖 +3：`katex` / `@vscode/markdown-it-katex` / `mermaid`（Mermaid 各图表类型按需懒加载分块）。
+- `tsc` ✅、`vite build` ✅。版本 → v0.3.2。
+
 ## 2026-06-17
 
 ### 已发布：v0.3.1 双平台

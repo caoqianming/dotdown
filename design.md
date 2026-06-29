@@ -322,6 +322,37 @@ interface PersistedTab {
 `localStorage`（`dotdown.split`）。拖动期间 `body.is-resizing` 全局禁选 + 统一光标，松手后
 `forceRepaint()` 兜底 WebView2 偶发不重绘。双击中线恢复 50/50。启动时 `init` 读回上次比例。
 
+### 4.21 数学公式 + 流程图（KaTeX / Mermaid，v0.3.2）
+
+预览/导出支持 **数学公式**（KaTeX）与 **流程图**（Mermaid）。
+
+**数学公式（KaTeX）**：接入 `@vscode/markdown-it-katex` 插件，`$...$` 行内、`$$...$$` 块级，
+KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无需后处理。样式由
+`import "katex/dist/katex.min.css"`（Vite 打包，字体随包）。`throwOnError:false` 让非法
+公式原样显示红字而非抛错。块级公式 `.katex-display` 居中、长公式可横向滚动。
+
+**流程图（Mermaid）**：Mermaid 渲染是**异步**的，与 markdown-it 同步管线不兼容，故两步走：
+
+1. *占位*：覆写 `fence` 渲染规则——``` ```mermaid ``` 代码块输出 `<pre class="mermaid">源码</pre>`
+   占位（源码 HTML 转义，其余语言仍走默认高亮）。
+2. *渲染*：`renderPreview()` 末尾 `runMermaid()` 找出 `pre.mermaid:not([data-done])`，逐个
+   `mermaid.render(id, code)` 取 SVG 回填、打 `data-done`。CSS 在 `data-done` 前 `visibility:hidden`
+   避免源码闪现；失败标 `data-done="error"` 显示红字错误。
+
+- **竞态防护**：`mermaidSeq` 计数，快速编辑触发多轮渲染时，旧轮 `seq !== mermaidSeq` 即丢弃结果。
+- **主题**：`ensureMermaidTheme()` 按 `isDark()` 在 `default`/`dark` 间 `initialize`（记 `mermaidTheme`
+  去重）；`applyTheme()` 切主题时若预览有图表则 `renderPreview()` 重渲染。
+- **首屏不重绘**：`runMermaid` 完成后 `forceRepaint()` 兜底 WebView2 偶发空白（见 §4.6）。
+
+**导出 HTML（自包含）**：`buildExportHtml` 改为 async——`inlineMermaidForExport()` 用 `DOMParser`
+把每个 `pre.mermaid` 替换为内联 SVG（导出配浅色样式故图表用浅色主题，渲染后还原预览主题），
+**无需 JS** 即可离线查看；含数学公式时在 `<head>` 加 KaTeX **CDN** 样式 `<link>`（字体多、内联会
+撑大文件，故用 CDN——查看需联网，这是唯一的非自包含点）。
+
+**导出 PDF**：走 `window.print()`，预览 DOM 里已渲染的 SVG/公式直接进 PDF。打印强制浅色背景，
+故 `exportPdf` 先判断：深色主题且有图表时，临时按浅色 `md.render` + `runMermaid` 重渲染再打印，
+打印后还原。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -350,7 +381,7 @@ interface PersistedTab {
 
 > 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、导出 PDF/HTML、
 > 文件关联 / 双击打开 / 右键菜单、发布打包、更新检查（Gitee 优先）、查找替换、
-> 字数统计、最近打开、图片、标签拖拽重排。
+> 字数统计、最近打开、图片、标签拖拽重排、数学公式 + 流程图。
 
 - [x] 更新检查（轻量方案，见 §4.11）
 - [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
@@ -363,6 +394,7 @@ interface PersistedTab {
 - [x] 标签拖拽重排（见 §4.18）
 - [x] 外部改动检测（聚焦时重载，见 §4.19）
 - [x] 分栏宽度可拖动（拖中线调左右宽度，见 §4.20）
+- [x] 数学公式 + 流程图（KaTeX / Mermaid，见 §4.21）
 - [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义
 
 ## 8. 关键设计决策记录

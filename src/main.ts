@@ -25,7 +25,10 @@ import {
 import MarkdownIt from "markdown-it";
 // @ts-expect-error: 该插件无类型声明
 import taskLists from "markdown-it-task-lists";
+import katexPlugin from "@vscode/markdown-it-katex";
 import hljs from "highlight.js";
+import mermaid from "mermaid";
+import "katex/dist/katex.min.css";
 
 // 启动时的欢迎文档
 const WELCOME = `# 欢迎使用 Dotdown
@@ -61,6 +64,24 @@ function hello(name) {
 | Ctrl+O | 打开 |
 | Ctrl+S | 保存 |
 
+### 数学公式
+
+行内公式 $E = mc^2$，块级公式：
+
+$$
+\\int_{a}^{b} f(x)\\,dx = F(b) - F(a)
+$$
+
+### 流程图（Mermaid）
+
+\`\`\`mermaid
+graph LR
+  A[编辑] --> B[预览]
+  B --> C{满意?}
+  C -->|是| D[保存]
+  C -->|否| A
+\`\`\`
+
 > 开始编辑左侧内容，预览会随之更新。
 `;
 
@@ -79,7 +100,46 @@ const md = new MarkdownIt({
     }
     return md.utils.escapeHtml(code);
   },
-}).use(taskLists, { enabled: true, label: true });
+})
+  .use(taskLists, { enabled: true, label: true })
+  // 数学公式：$...$ 行内、$$...$$ 块级（KaTeX 同步渲染为 HTML）
+  .use(katexPlugin, { throwOnError: false });
+
+// ---------- Mermaid 图表 ----------
+// 标记当前已初始化的 mermaid 主题，避免重复 initialize。
+let mermaidTheme = "";
+function ensureMermaidTheme(dark = isDark()) {
+  const theme = dark ? "dark" : "default";
+  if (theme === mermaidTheme) return;
+  mermaidTheme = theme;
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme });
+}
+
+// 渲染计数：丢弃过期的异步渲染结果，避免快速编辑时的竞态。
+let mermaidSeq = 0;
+
+/** 把预览中 <pre class="mermaid"> 的代码异步渲染成 SVG。 */
+async function runMermaid() {
+  const nodes = Array.from(previewEl.querySelectorAll<HTMLElement>("pre.mermaid:not([data-done])"));
+  if (!nodes.length) return;
+  const seq = ++mermaidSeq;
+  ensureMermaidTheme();
+  for (let i = 0; i < nodes.length; i++) {
+    const el = nodes[i];
+    const code = el.textContent ?? "";
+    try {
+      const { svg } = await mermaid.render(`mmd-${seq}-${i}`, code);
+      if (seq !== mermaidSeq) return; // 已有更新的渲染，丢弃本轮
+      el.innerHTML = svg;
+      el.dataset.done = "1";
+    } catch (e) {
+      if (seq !== mermaidSeq) return;
+      el.dataset.done = "error";
+      el.textContent = `Mermaid 渲染失败：${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  forceRepaint();
+}
 
 // ---------- 图片路径解析 ----------
 /** 网络/数据 URI 等外部来源：原样输出，不当作本地文件处理。 */
@@ -146,6 +206,18 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   return defaultImageRender(tokens, idx, options, env, self);
 };
 
+// 覆写围栏代码块渲染：```mermaid 输出占位 <pre class="mermaid">，
+// 渲染后由 runMermaid() 替换为 SVG；其余语言走默认（含高亮）。
+const defaultFenceRender =
+  md.renderer.rules.fence ||
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  if (tokens[idx].info.trim().toLowerCase() === "mermaid") {
+    return `<pre class="mermaid">${md.utils.escapeHtml(tokens[idx].content)}</pre>`;
+  }
+  return defaultFenceRender(tokens, idx, options, env, self);
+};
+
 // ---------- 标签数据模型 ----------
 interface Tab {
   id: number; // 自增唯一 id
@@ -209,6 +281,9 @@ const THEME_ICON: Record<ThemeMode, string> = {
 function applyTheme() {
   document.documentElement.dataset.theme = isDark() ? "dark" : "light";
   editor.dispatch({ effects: themeCompartment.reconfigure(editorThemeExt()) });
+  // Mermaid 主题随明暗切换：若预览里有图表则按新主题重渲染
+  ensureMermaidTheme();
+  if (previewEl.querySelector("pre.mermaid")) renderPreview();
   const btn = document.getElementById("btn-theme");
   if (btn) {
     const name: Record<ThemeMode, string> = { light: "浅色", dark: "深色", system: "跟随系统" };
@@ -398,6 +473,7 @@ function renderPreview() {
   forceRepaint();
   // 预览被重建会清掉高亮，若正在预览中搜索则重新标注
   if (!searchBar.hidden && searchTarget() === "preview") highlightPreview(searchInput.value);
+  void runMermaid();
 }
 
 /**
@@ -1032,10 +1108,39 @@ body{margin:0;background:#fff;color:#24292f;font-family:-apple-system,"Segoe UI"
 .hljs-number,.hljs-literal{color:#79c0ff}
 .hljs-title,.hljs-section{color:#d2a8ff}
 .hljs-built_in,.hljs-type{color:#ffa657}
+.markdown-body .mermaid{margin:1em 0;text-align:center}
+.markdown-body .mermaid svg{max-width:100%;height:auto}
+.markdown-body .katex-display{margin:1em 0;overflow-x:auto;overflow-y:hidden}
 `;
 
+// KaTeX 样式（导出文件用，含数学公式时引入；CDN 版以保持导出文件小巧）。
+const KATEX_CDN_CSS =
+  '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">';
+
+/** 把导出 HTML 里的 <pre class="mermaid">代码</pre> 替换为内联 SVG（自包含、无需 JS）。 */
+async function inlineMermaidForExport(html: string): Promise<string> {
+  if (!html.includes('class="mermaid"')) return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const nodes = Array.from(doc.querySelectorAll<HTMLElement>("pre.mermaid"));
+  ensureMermaidTheme(false); // 导出文件配浅色样式，图表也用浅色主题
+  for (let i = 0; i < nodes.length; i++) {
+    const code = nodes[i].textContent ?? "";
+    try {
+      const { svg } = await mermaid.render(`mmd-exp-${i}`, code);
+      const wrap = doc.createElement("div");
+      wrap.className = "mermaid";
+      wrap.innerHTML = svg;
+      nodes[i].replaceWith(wrap);
+    } catch {
+      /* 渲染失败则保留原始代码块 */
+    }
+  }
+  ensureMermaidTheme(); // 还原预览所用主题
+  return doc.body.innerHTML;
+}
+
 /** 渲染当前文档为自包含 HTML 文档字符串（图片保留原始路径）。 */
-function buildExportHtml(title: string): string {
+async function buildExportHtml(title: string): Promise<string> {
   rawImagePaths = true;
   let body: string;
   try {
@@ -1043,6 +1148,8 @@ function buildExportHtml(title: string): string {
   } finally {
     rawImagePaths = false;
   }
+  body = await inlineMermaidForExport(body);
+  const mathCss = body.includes('class="katex') ? KATEX_CDN_CSS : "";
   const safeTitle = md.utils.escapeHtml(title);
   return `<!doctype html>
 <html lang="zh-CN">
@@ -1050,6 +1157,7 @@ function buildExportHtml(title: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${safeTitle}</title>
+${mathCss}
 <style>${EXPORT_CSS}</style>
 </head>
 <body>
@@ -1069,7 +1177,7 @@ async function exportHtml() {
   });
   if (!path) return;
   try {
-    await invoke("write_file", { path, content: buildExportHtml(stem) });
+    await invoke("write_file", { path, content: await buildExportHtml(stem) });
   } catch (e) {
     await message(String(e), { title: "导出 HTML 失败", kind: "error" });
   }
@@ -1174,12 +1282,23 @@ window.addEventListener("afterprint", () => {
   }
 });
 
-function exportPdf() {
+async function exportPdf() {
   const t = activeTab();
   // 用文件名作为 PDF 默认文件名（去扩展名），打印结束后还原
   titleBeforePrint = document.title;
   document.title = t && t.path ? nameOf(t).replace(/\.[^.]+$/, "") : "Dotdown";
+  // 打印强制浅色背景，深色 Mermaid 图表先临时转浅色重渲染，打印后还原
+  const restoreDark = isDark() && !!previewEl.querySelector("pre.mermaid");
+  if (restoreDark) {
+    ensureMermaidTheme(false);
+    previewEl.innerHTML = md.render(editor.state.doc.toString());
+    await runMermaid();
+  }
   window.print();
+  if (restoreDark) {
+    ensureMermaidTheme(true);
+    renderPreview();
+  }
 }
 
 // ---------- 滚动同步（编辑器 -> 预览）----------

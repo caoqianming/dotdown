@@ -1,7 +1,7 @@
 {
   "name": "dotdown",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,24 +10,27 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2",
-    "@tauri-apps/plugin-opener": "^2",
-    "codemirror": "^6.0.1",
     "@codemirror/lang-markdown": "^6.3.1",
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/search": "^6.7.0",
     "@codemirror/state": "^6.5.0",
-    "@codemirror/view": "^6.36.1",
     "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.1",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@vscode/markdown-it-katex": "^1.1.2",
+    "codemirror": "^6.0.1",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
     "markdown-it": "^14.1.0",
     "markdown-it-task-lists": "^2.1.1",
-    "highlight.js": "^11.11.1"
+    "mermaid": "^11.16.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@types/markdown-it": "^14.1.2",
-    "vite": "^6.0.3",
-    "typescript": "~5.6.2"
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3"
   }
 }

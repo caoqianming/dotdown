@@ -772,6 +772,34 @@ body.is-resizing {
   margin: 0 auto;
 }
 
+/* Mermaid 图表：渲染前隐藏原始代码避免闪烁，渲染后居中显示 SVG */
+.markdown-body pre.mermaid {
+  margin: 1em 0;
+  text-align: center;
+  background: none;
+  padding: 0;
+}
+.markdown-body pre.mermaid:not([data-done]) {
+  visibility: hidden;
+}
+.markdown-body pre.mermaid[data-done="error"] {
+  visibility: visible;
+  color: #c0392b;
+  font-size: 0.85em;
+  text-align: left;
+}
+.markdown-body pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 数学公式（KaTeX）块级居中、长公式可横向滚动 */
+.markdown-body .katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .markdown-body h1,
 .markdown-body h2 {
   border-bottom: 1px solid var(--border);

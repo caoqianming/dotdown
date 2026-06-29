@@ -29,6 +29,8 @@
 - **查找替换** — `Ctrl+F` 查找、`Ctrl+H` 替换，编辑器与预览均可逐个高亮跳转（按当前视图分派；替换仅编辑器）
 - **字数统计** — 底部状态栏实时显示字数 / 字符 / 行，选区另计「已选 N 字」
 - **GitHub 风格渲染** — 表格、任务列表、代码高亮（highlight.js）
+- **数学公式** — `$...$` 行内、`$$...$$` 块级，KaTeX 渲染
+- **流程图** — ` ```mermaid ` 代码块用 Mermaid 渲染为图表，随主题明暗切换
 - **导出 PDF / HTML** — 一键把预览导出为 PDF（系统打印「另存为 PDF」）或自包含 HTML 单文件
 - **文件关联** — 双击 `.md` 或右键「用 Dotdown 打开」，在现有窗口开新标签
 - **文件操作** — 新建 / 打开 / 保存 / 另存为（原生对话框，Rust 读写）
@@ -58,7 +60,7 @@
 | 外壳  | Tauri 2（Rust 后端：原生对话框 + 文件读写命令）               |
 | 前端  | Vanilla TypeScript + Vite 6                                   |
 | 编辑器 | CodeMirror 6（`@codemirror/lang-markdown`）                  |
-| 渲染  | markdown-it + `markdown-it-task-lists` + highlight.js          |
+| 渲染  | markdown-it + `markdown-it-task-lists` + highlight.js + KaTeX + Mermaid |
 
 ## 🚀 开始
 
@@ -134,6 +136,7 @@ exe；若用 GNU 构建则会**动态依赖 `WebView2Loader.dll`**，安装后�
 - [x] 标签拖拽重排
 - [x] 外部改动检测（聚焦时重载）
 - [x] 分栏宽度可拖动调整
+- [x] 数学公式（KaTeX）+ 流程图（Mermaid）
 
 ## 📄 License
 
