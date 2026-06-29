@@ -16,12 +16,13 @@
 
 ## 2026-06-29（续）
 
-### 已发布：v0.3.3 GitHub
-- 源码 + tag `v0.3.3` 推 GitHub；`tauri build` 出 `Dotdown_0.3.3_x64-setup.exe`（NSIS 4.53MB）
+### 已发布：v0.3.3 双平台
+- 源码 + tag `v0.3.3` 推 GitHub 与 Gitee；`tauri build` 出 `Dotdown_0.3.3_x64-setup.exe`（NSIS 4.53MB）
   与免安装 `dotdown.exe`（11.56MB）——两者较前明显增大，因引入 Mermaid/KaTeX。
-- GitHub Release 经 REST API 创建并上传两资产（token 取自 git credential，走代理）。
+- 两端 Release 均经 REST API 创建并上传两资产；本次用 **PowerShell `Invoke-RestMethod`**
+  （GitHub token 取自 git credential、Gitee 读 `GITEE_TOKEN`），JSON body 直接成功、中文不乱码，
+  比以往 curl/Python 绕法干净。
 - 发行说明合并记录 v0.3.2（KaTeX/Mermaid，未单独发版）与 v0.3.3（设置面板）。
-- Gitee 待补（本次为上午开发、下午发布）。
 
 ### 新功能：统一设置面板（v0.3.3）
 - 工具栏加齿轮按钮，开**设置弹窗**汇集配置，改动即时生效 + 持久化：主题（浅/深/系统）、
