@@ -353,6 +353,28 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 故 `exportPdf` 先判断：深色主题且有图表时，临时按浅色 `md.render` + `runMermaid` 重渲染再打印，
 打印后还原。
 
+### 4.22 统一设置面板（v0.3.3）
+
+工具栏齿轮按钮打开**设置弹窗**，把原本散在各处（主题按钮、大纲按钮）的配置和新增的可调项
+汇到一处，改动**即时生效并持久化**：
+
+- **主题**：浅色 / 深色 / 跟随系统（radio），与工具栏 🌙 按钮共用 `dotdown.theme`，改完即 `applyTheme()`。
+- **编辑器字号**（11–24px）：CodeMirror 用 `fontCompartment` 包 `EditorView.theme({"&":{fontSize}})`，
+  运行时 `reconfigure` 切换。存 `dotdown.editorFontSize`。
+- **预览字号**（12–24px）：`.markdown-body` 的 `font-size: var(--preview-font)`，设根节点 CSS 变量即可。
+  存 `dotdown.previewFontSize`。
+- **编辑器自动换行**：原先恒为 `EditorView.lineWrapping`，改由 `wrapCompartment` 控制可关。
+  存 `dotdown.editorWrap`。
+- **默认展开大纲**：复用 `setOutline()`（写 `dotdown.outline`）。
+- **恢复默认**：一键把上述全部重置回默认值。
+
+**Compartment 与多标签**：编辑器字号/换行和主题一样，`makeState` 建 state 时按当前值 `of()`，
+但每个标签的 state 是各自创建的——切到旧标签时其 Compartment 仍是创建时的值。故把原先
+`activate()`/`reloadTabFromDisk()` 里「只重配主题」改为 `reconfigureEditor()`，一次对齐
+主题/字号/换行三个 Compartment，保证各标签观感一致。
+
+存储沿用「一项一个 `localStorage` key」的既有风格（未合并成单对象），只是 UI 收敛到一个弹窗。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -381,7 +403,7 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 
 > 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、导出 PDF/HTML、
 > 文件关联 / 双击打开 / 右键菜单、发布打包、更新检查（Gitee 优先）、查找替换、
-> 字数统计、最近打开、图片、标签拖拽重排、数学公式 + 流程图。
+> 字数统计、最近打开、图片、标签拖拽重排、数学公式 + 流程图、统一设置面板。
 
 - [x] 更新检查（轻量方案，见 §4.11）
 - [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
@@ -395,6 +417,7 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 - [x] 外部改动检测（聚焦时重载，见 §4.19）
 - [x] 分栏宽度可拖动（拖中线调左右宽度，见 §4.20）
 - [x] 数学公式 + 流程图（KaTeX / Mermaid，见 §4.21）
+- [x] 统一设置面板（主题 / 字号 / 换行 / 大纲，见 §4.22）
 - [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义
 
 ## 8. 关键设计决策记录

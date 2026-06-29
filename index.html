@@ -54,6 +54,9 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           </button>
           <button id="btn-theme" title="切换主题">🌙</button>
+          <button id="btn-settings" title="设置">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
           <button id="btn-about" title="关于 / 帮助">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
           </button>
@@ -121,6 +124,7 @@
           <li><b>最近打开</b>：工具栏「最近」下拉一键重开近期文件</li>
           <li><b>大纲侧栏</b>：标题目录，点击平滑跳转</li>
           <li><b>深色模式</b>：浅色 / 深色 / 跟随系统三态切换</li>
+          <li><b>设置面板</b>：齿轮按钮汇集主题、字号、自动换行、大纲，改动即时生效</li>
           <li><b>视图切换</b>：编辑 / 分栏 / 预览；编辑器 → 预览滚动同步</li>
           <li><b>查找替换</b>：Ctrl+F 查找、Ctrl+H 替换，编辑器与预览均可逐个高亮跳转</li>
           <li><b>字数统计</b>：底部状态栏实时显示字数 / 字符 / 行，选区另计</li>
@@ -150,6 +154,54 @@
         <p class="modal-sub">
           Tauri 2 · Vanilla TS + Vite · CodeMirror 6 · markdown-it · highlight.js
         </p>
+      </div>
+    </div>
+
+    <!-- 设置 弹窗 -->
+    <div id="settings-overlay" class="modal-overlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <button id="settings-close" class="modal-close" title="关闭 (Esc)">×</button>
+        <h2 id="settings-title" class="modal-title">设置</h2>
+
+        <h3>外观</h3>
+        <div class="settings-row">
+          <span class="settings-label">主题</span>
+          <div class="settings-radios">
+            <label><input type="radio" name="set-theme" value="light" /> 浅色</label>
+            <label><input type="radio" name="set-theme" value="dark" /> 深色</label>
+            <label><input type="radio" name="set-theme" value="system" /> 跟随系统</label>
+          </div>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="set-editor-font">编辑器字号</label>
+          <div class="settings-control">
+            <input type="range" id="set-editor-font" min="11" max="24" step="1" />
+            <span id="set-editor-font-val" class="settings-val"></span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label" for="set-preview-font">预览字号</label>
+          <div class="settings-control">
+            <input type="range" id="set-preview-font" min="12" max="24" step="1" />
+            <span id="set-preview-font-val" class="settings-val"></span>
+          </div>
+        </div>
+
+        <h3>编辑器</h3>
+        <div class="settings-row">
+          <label class="settings-label" for="set-wrap">自动换行</label>
+          <input type="checkbox" id="set-wrap" />
+        </div>
+
+        <h3>界面</h3>
+        <div class="settings-row">
+          <label class="settings-label" for="set-outline">默认展开大纲</label>
+          <input type="checkbox" id="set-outline" />
+        </div>
+
+        <div class="settings-foot">
+          <button id="settings-reset" class="btn-update">恢复默认</button>
+        </div>
       </div>
     </div>
   </body>

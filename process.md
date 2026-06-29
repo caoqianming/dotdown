@@ -14,6 +14,17 @@
 
 ---
 
+## 2026-06-29（续）
+
+### 新功能：统一设置面板（v0.3.3）
+- 工具栏加齿轮按钮，开**设置弹窗**汇集配置，改动即时生效 + 持久化：主题（浅/深/系统）、
+  编辑器字号（11–24px）、预览字号（12–24px）、编辑器自动换行、默认展开大纲，外加「恢复默认」。
+- 字号/换行经 CodeMirror `Compartment`（`fontCompartment`/`wrapCompartment`）运行时 reconfigure；
+  预览字号走 `.markdown-body` 的 `--preview-font` CSS 变量。原 `EditorView.lineWrapping` 改为可关。
+- 多标签一致性：`activate`/`reloadTabFromDisk` 里「只重配主题」改成 `reconfigureEditor()`，
+  一次对齐主题/字号/换行三个 Compartment。存储沿用一项一个 localStorage key，仅 UI 收敛。
+- 详见 `design.md §4.22`。`tsc` ✅、`vite build` ✅。版本 → v0.3.3。
+
 ## 2026-06-29
 
 ### 新功能：数学公式 + 流程图（v0.3.2）

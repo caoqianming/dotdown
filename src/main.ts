@@ -308,6 +308,70 @@ darkQuery.addEventListener("change", () => {
   if (themeMode === "system") applyTheme();
 });
 
+// ---------- 设置（编辑器/预览字号、自动换行；主题与大纲沿用各自的 key）----------
+const EFONT_KEY = "dotdown.editorFontSize";
+const PFONT_KEY = "dotdown.previewFontSize";
+const WRAP_KEY = "dotdown.editorWrap";
+const DEFAULT_EFONT = 14;
+const DEFAULT_PFONT = 16;
+const DEFAULT_WRAP = true;
+
+const fontCompartment = new Compartment();
+const wrapCompartment = new Compartment();
+
+function readNumSetting(key: string, def: number, min: number, max: number): number {
+  try {
+    const v = parseInt(localStorage.getItem(key) ?? "", 10);
+    if (Number.isFinite(v)) return Math.min(max, Math.max(min, v));
+  } catch {
+    /* ignore */
+  }
+  return def;
+}
+
+function readBoolSetting(key: string, def: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key);
+    if (v !== null) return v === "1";
+  } catch {
+    /* ignore */
+  }
+  return def;
+}
+
+let editorFont = readNumSetting(EFONT_KEY, DEFAULT_EFONT, 11, 24);
+let previewFont = readNumSetting(PFONT_KEY, DEFAULT_PFONT, 12, 24);
+let editorWrap = readBoolSetting(WRAP_KEY, DEFAULT_WRAP);
+
+function editorFontExt() {
+  // 字号设在 .cm-scroller（styles.css 也在此处定义字体），否则被其自身规则覆盖
+  return EditorView.theme({ ".cm-scroller": { fontSize: `${editorFont}px` } });
+}
+function editorWrapExt() {
+  return editorWrap ? EditorView.lineWrapping : [];
+}
+
+function applyEditorFont() {
+  editor.dispatch({ effects: fontCompartment.reconfigure(editorFontExt()) });
+}
+function applyEditorWrap() {
+  editor.dispatch({ effects: wrapCompartment.reconfigure(editorWrapExt()) });
+}
+function applyPreviewFont() {
+  document.documentElement.style.setProperty("--preview-font", `${previewFont}px`);
+}
+
+/** 重配激活编辑器的全部 Compartment（主题/字号/换行）——切标签或外部重载后对齐。 */
+function reconfigureEditor() {
+  editor.dispatch({
+    effects: [
+      themeCompartment.reconfigure(editorThemeExt()),
+      fontCompartment.reconfigure(editorFontExt()),
+      wrapCompartment.reconfigure(editorWrapExt()),
+    ],
+  });
+}
+
 // ---------- CodeMirror 编辑器（单 View，按标签换 State）----------
 const onChange = EditorView.updateListener.of((u) => {
   if (u.docChanged) {
@@ -327,7 +391,8 @@ function makeState(doc: string): EditorState {
       basicSetup,
       markdown({ base: markdownLanguage, codeLanguages: languages }),
       themeCompartment.of(editorThemeExt()),
-      EditorView.lineWrapping,
+      fontCompartment.of(editorFontExt()),
+      wrapCompartment.of(editorWrapExt()),
       // 搜索高亮（用自定义搜索条驱动，不开 CM 自带面板）
       search(),
       onChange,
@@ -515,8 +580,8 @@ function activate(id: number) {
   const t = activeTab();
   if (t) {
     editor.setState(t.state);
-    // 该标签的 state 可能在不同主题下创建，换入后对齐当前主题
-    editor.dispatch({ effects: themeCompartment.reconfigure(editorThemeExt()) });
+    // 该标签的 state 可能在不同主题/字号下创建，换入后对齐当前设置
+    reconfigureEditor();
   }
   renderTabs();
   renderPreview();
@@ -1194,6 +1259,91 @@ function closeAbout() {
   aboutOverlay.hidden = true;
 }
 
+// ---------- 设置弹窗（汇集主题 / 字号 / 换行 / 大纲）----------
+const settingsOverlay = document.getElementById("settings-overlay") as HTMLElement;
+const setEditorFont = document.getElementById("set-editor-font") as HTMLInputElement;
+const setEditorFontVal = document.getElementById("set-editor-font-val") as HTMLElement;
+const setPreviewFont = document.getElementById("set-preview-font") as HTMLInputElement;
+const setPreviewFontVal = document.getElementById("set-preview-font-val") as HTMLElement;
+const setWrap = document.getElementById("set-wrap") as HTMLInputElement;
+const setOutlineChk = document.getElementById("set-outline") as HTMLInputElement;
+
+/** 用当前生效值回填弹窗控件。 */
+function syncSettingsUI() {
+  const themeRadio = document.querySelector<HTMLInputElement>(
+    `input[name="set-theme"][value="${themeMode}"]`,
+  );
+  if (themeRadio) themeRadio.checked = true;
+  setEditorFont.value = String(editorFont);
+  setEditorFontVal.textContent = `${editorFont}px`;
+  setPreviewFont.value = String(previewFont);
+  setPreviewFontVal.textContent = `${previewFont}px`;
+  setWrap.checked = editorWrap;
+  setOutlineChk.checked = appEl.classList.contains("outline-open");
+}
+
+function openSettings() {
+  syncSettingsUI();
+  settingsOverlay.hidden = false;
+}
+function closeSettings() {
+  settingsOverlay.hidden = true;
+}
+
+function saveSetting(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 绑定设置弹窗各控件：改动即时生效并持久化。 */
+function bindSettings() {
+  document.querySelectorAll<HTMLInputElement>('input[name="set-theme"]').forEach((r) =>
+    r.addEventListener("change", () => {
+      if (!r.checked) return;
+      themeMode = r.value as ThemeMode;
+      saveSetting(THEME_KEY, themeMode);
+      applyTheme();
+    }),
+  );
+  setEditorFont.addEventListener("input", () => {
+    editorFont = parseInt(setEditorFont.value, 10) || DEFAULT_EFONT;
+    setEditorFontVal.textContent = `${editorFont}px`;
+    saveSetting(EFONT_KEY, String(editorFont));
+    applyEditorFont();
+  });
+  setPreviewFont.addEventListener("input", () => {
+    previewFont = parseInt(setPreviewFont.value, 10) || DEFAULT_PFONT;
+    setPreviewFontVal.textContent = `${previewFont}px`;
+    saveSetting(PFONT_KEY, String(previewFont));
+    applyPreviewFont();
+  });
+  setWrap.addEventListener("change", () => {
+    editorWrap = setWrap.checked;
+    saveSetting(WRAP_KEY, editorWrap ? "1" : "0");
+    applyEditorWrap();
+  });
+  setOutlineChk.addEventListener("change", () => setOutline(setOutlineChk.checked));
+  document.getElementById("settings-reset")!.addEventListener("click", () => {
+    themeMode = "system";
+    editorFont = DEFAULT_EFONT;
+    previewFont = DEFAULT_PFONT;
+    editorWrap = DEFAULT_WRAP;
+    saveSetting(THEME_KEY, themeMode);
+    saveSetting(EFONT_KEY, String(editorFont));
+    saveSetting(PFONT_KEY, String(previewFont));
+    saveSetting(WRAP_KEY, editorWrap ? "1" : "0");
+    applyTheme();
+    applyEditorFont();
+    applyEditorWrap();
+    applyPreviewFont();
+    setOutline(true);
+    syncSettingsUI();
+  });
+}
+
 // ---------- 检查更新（轻量方案：只查版本 + 跳转下载页，不在应用内下载）----------
 // 仓库坐标。国内用户优先 Gitee，失败回退 GitHub。
 const REPO = "caoqianming/dotdown";
@@ -1542,6 +1692,17 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !aboutOverlay.hidden) closeAbout();
 });
 
+// 设置弹窗
+document.getElementById("btn-settings")!.addEventListener("click", openSettings);
+document.getElementById("settings-close")!.addEventListener("click", closeSettings);
+settingsOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsOverlay) closeSettings();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !settingsOverlay.hidden) closeSettings();
+});
+bindSettings();
+
 // 搜索条事件
 document.getElementById("search-next")!.addEventListener("click", searchNext);
 document.getElementById("search-prev")!.addEventListener("click", searchPrev);
@@ -1613,7 +1774,7 @@ function reloadTabFromDisk(t: Tab, disk: string) {
   t.lastSaved = disk;
   if (t.id === activeId) {
     editor.setState(makeState(disk));
-    editor.dispatch({ effects: themeCompartment.reconfigure(editorThemeExt()) });
+    reconfigureEditor();
     renderPreview();
     updateWordCount();
   } else {
@@ -1668,6 +1829,7 @@ async function checkExternalChanges() {
 // ---------- 初始化 ----------
 async function init() {
   applyTheme();
+  applyPreviewFont(); // 恢复预览字号（编辑器字号/换行已在建 state 时生效）
   applySplit(readSplit()); // 恢复上次的分栏宽度比例
   try {
     // 默认展开大纲；仅当用户上次显式关闭（"0"）才保持收起

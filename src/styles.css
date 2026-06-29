@@ -549,6 +549,63 @@ body {
   color: var(--accent);
 }
 
+/* 设置弹窗：标签 + 控件每行对齐 */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.settings-label {
+  color: var(--text);
+  font-size: 0.92em;
+}
+
+.settings-radios {
+  display: flex;
+  gap: 14px;
+}
+
+.settings-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.settings-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-control input[type="range"] {
+  width: 160px;
+}
+
+.settings-val {
+  min-width: 38px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.settings-foot {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .about-list {
   margin: 0;
   padding-left: 20px;
@@ -740,7 +797,7 @@ body.is-resizing {
 
 .cm-scroller {
   font-family: "SF Mono", "Cascadia Code", Consolas, "Microsoft YaHei", monospace;
-  font-size: 13.5px;
+  /* 字号由设置面板经 CodeMirror 主题 Compartment 控制（默认 14px） */
   line-height: 1.6;
 }
 
@@ -770,6 +827,7 @@ body.is-resizing {
   line-height: 1.7;
   max-width: 900px;
   margin: 0 auto;
+  font-size: var(--preview-font, 16px);
 }
 
 /* Mermaid 图表：渲染前隐藏原始代码避免闪烁，渲染后居中显示 SVG */
