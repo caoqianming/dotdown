@@ -16,6 +16,12 @@
 
 ## 2026-07-09
 
+### 已发布：v0.3.4 双平台
+- 源码 + tag `v0.3.4` 推 GitHub 与 Gitee（下午网络正常，Gitee 顺带补上缺失的 `v0.2.4` tag）；
+  `tauri build` 出 `Dotdown_0.3.4_x64-setup.exe`（NSIS 4.54MB）与免安装 `dotdown.exe`（11.56MB）。
+- 两端 Release 均经 PowerShell `Invoke-RestMethod` 创建并上传两资产（GitHub token 取自
+  git credential、Gitee 读 `GITEE_TOKEN` 且 access_token 放 URL 查询串），一次成功。
+
 ### 新功能：双向滚动同步 + 大纲定位编辑器（行映射，v0.3.4）
 - **行映射基础设施**：markdown-it `core.ruler` 注入 `data-line`（块级 token 的源码起始行），
   预览元素与源码行从此可互相定位——这是本次的架构重点，后续"点预览跳编辑"类交互都建其上。
