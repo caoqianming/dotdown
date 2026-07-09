@@ -135,7 +135,9 @@ interface PersistedTab {
 ### 4.6 大纲侧栏
 
 从**渲染后的预览** DOM 中提取 `h1`–`h6`（而非另行解析 Markdown，保证与预览一致），
-给每个标题分配 `id` 并生成可点击项，点击 `scrollIntoView` 平滑跳转。按标题层级缩进。
+给每个标题分配 `id` 并生成可点击项，点击 `scrollIntoView` 平滑跳转预览；标题元素带
+`data-line`（见 §4.7），点击**同时把编辑器光标定位到对应源码行**并滚到视口顶部——
+期间 `suspendScrollSync` 暂停双向同步防两侧互拽。按标题层级缩进。
 工具栏按钮或 Ctrl+\ 开关，状态存于 `localStorage`（key `dotdown.outline`）。
 **默认展开**：无记录时默认开，仅当用户上次显式关闭（`"0"`）才保持收起。
 
@@ -155,10 +157,31 @@ interface PersistedTab {
    **关键：最终必须停在最大化状态**：1px 抖动太小无效、最大化窗口 `set_size` 被系统忽略、
    且切回非最大化又会复现裁切。仅在扩展屏触发，主屏正常打开不受影响、无多余闪烁。
 
-### 4.7 滚动同步
+### 4.7 滚动同步（行映射，双向，v0.3.4）
 
-编辑器 `scrollDOM` 滚动时按比例设置预览面板 `scrollTop`（编辑器 → 预览，单向）。
-绑定一次，跨标签复用同一 View 故无需重绑。
+早期为纯比例映射（编辑器 → 预览单向）：KaTeX/Mermaid 引入后，5 行 mermaid 源码可渲染出
+数百像素的图表，源码与预览的高度比例严重失真，比例同步越滚越偏。v0.3.4 改为**源码行 ↔
+预览元素的行映射**，并补上反向同步：
+
+- **锚点注入**：markdown-it `core.ruler` 追加 `source_line` 规则，给带 `map` 的块级 token
+  （`nesting >= 0`、非 `hidden`、非 `inline`）注入 `data-line`（源码起始行，0 基）。
+  mermaid 围栏走自定义渲染，在覆写的 `fence` 规则里手动带上。导出渲染（`exportRender`）
+  时跳过注入，导出文件不含定位属性。
+- **锚点缓存**：`lineAnchors()` 从预览 DOM 收集 `[data-line]` 元素，**只缓存元素引用**——
+  位置随图片/图表异步加载会变，滚动时用 `getBoundingClientRect` 实时测量。预览重建
+  （`renderPreview` 及导出 PDF 的临时重渲染）后置空缓存，下次滚动懒重建。
+- **编辑器 → 预览**：`editorTopLine()` 用 `lineBlockAtHeight(scrollTop - documentPadding.top)`
+  算出视口顶部的虚拟行（含块内小数偏移）；按 line 值二分找相邻两锚点，在其预览位置间
+  线性插值得目标 `scrollTop`。
+- **预览 → 编辑器**：对称逆运算——按视口坐标二分找预览顶部两侧锚点，反插值出虚拟行，
+  `scrollEditorToLine()` 经 `lineBlockAt` 换算编辑器 `scrollTop`。
+- **边界**：滚动到顶/底 1px 内强制对齐两端，消除插值累计误差；无锚点（空文档等）回退
+  比例同步；仅分栏模式启用（单栏时对侧 `display:none`，测量无效）。
+- **防回环**：程序化设 `scrollTop` 也会触发对侧 scroll 事件。`claimScroll()` 记录先滚的
+  一侧为 owner（120ms 无新事件释放），存续期内对侧事件一律忽略；`suspendScrollSync(ms)`
+  供大纲跳转等"两侧各自精确定位"的场景整体暂停同步。
+
+监听绑定一次，跨标签复用同一 View 故无需重绑。
 
 ### 4.8 关于 / 帮助弹窗
 
@@ -288,8 +311,9 @@ interface PersistedTab {
 - **导出 HTML**：把当前文档渲染为**自包含 `.html`**——内联一套浅色 markdown 样式（`EXPORT_CSS`，
   不随应用主题，换台机器/浏览器打开仍美观），`write_file` 落盘，默认存到源文件同级、同名 `.html`。
 
-- **图片路径**：导出时置 `rawImagePaths=true`，图片渲染规则**跳过** `convertFileSrc` 重写、保留
-  原始路径——asset:// URL 换环境打不开，而相对引用 `assets/…` 在导出文件与源文件同级时仍可用。
+- **图片路径**：导出时置 `exportRender=true`（v0.3.4 由 `rawImagePaths` 更名），图片渲染规则
+  **跳过** `convertFileSrc` 重写、保留原始路径——asset:// URL 换环境打不开，而相对引用
+  `assets/…` 在导出文件与源文件同级时仍可用；同时跳过 `data-line` 注入（见 §4.7）。
   （`try/finally` 确保渲染后复位标志，不污染预览。）
 
 ### 4.18 标签拖拽重排（v0.3.0）
@@ -403,7 +427,8 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 
 > 已完成：多标签页、会话恢复、深色模式、大纲侧栏、关于弹窗、导出 PDF/HTML、
 > 文件关联 / 双击打开 / 右键菜单、发布打包、更新检查（Gitee 优先）、查找替换、
-> 字数统计、最近打开、图片、标签拖拽重排、数学公式 + 流程图、统一设置面板。
+> 字数统计、最近打开、图片、标签拖拽重排、数学公式 + 流程图、统一设置面板、
+> 双向滚动同步（行映射）。
 
 - [x] 更新检查（轻量方案，见 §4.11）
 - [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
@@ -418,7 +443,9 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 - [x] 分栏宽度可拖动（拖中线调左右宽度，见 §4.20）
 - [x] 数学公式 + 流程图（KaTeX / Mermaid，见 §4.21）
 - [x] 统一设置面板（主题 / 字号 / 换行 / 大纲，见 §4.22）
-- [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义
+- [x] 双向滚动同步 + 大纲定位编辑器（源码行 ↔ 预览行映射，见 §4.7）
+- [ ] Markdown 编辑增强（Ctrl+B/I 格式化、列表自动续行、Tab 缩进）
+- [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义 / 文件树侧栏（前置：拆分 main.ts 模块）
 
 ## 8. 关键设计决策记录
 

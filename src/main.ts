@@ -188,9 +188,21 @@ function resolveLocalImage(src: string): string {
   return convertFileSrc(resolvePath(base, p));
 }
 
-// 导出 HTML 时置真：保留图片原始路径（asset:// URL 换台机器打不开，
-// 相对引用 assets/… 在导出文件同级时仍可用）。
-let rawImagePaths = false;
+// 导出 HTML 时置真：图片保留原始路径（asset:// URL 换台机器打不开，相对引用
+// assets/… 在导出文件同级时仍可用），且不注入 data-line 定位属性（导出文件用不上）。
+let exportRender = false;
+
+// 给块级 token 注入 data-line（源码起始行，0 基），预览元素 ↔ 源码行的映射，
+// 供双向滚动同步与大纲定位编辑器使用。inline 的 attrs 不会被渲染，跳过。
+md.core.ruler.push("source_line", (state) => {
+  if (exportRender) return true;
+  for (const t of state.tokens) {
+    if (t.map && t.nesting >= 0 && !t.hidden && t.type !== "inline") {
+      t.attrSet("data-line", String(t.map[0]));
+    }
+  }
+  return true;
+});
 
 // 覆写图片渲染：本地路径经 convertFileSrc 重写，外部链接原样保留
 const defaultImageRender =
@@ -201,7 +213,7 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const i = token.attrIndex("src");
   if (i >= 0 && token.attrs) {
     const src = token.attrs[i][1];
-    if (!rawImagePaths && !isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src);
+    if (!exportRender && !isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src);
   }
   return defaultImageRender(tokens, idx, options, env, self);
 };
@@ -212,8 +224,10 @@ const defaultFenceRender =
   md.renderer.rules.fence ||
   ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
-  if (tokens[idx].info.trim().toLowerCase() === "mermaid") {
-    return `<pre class="mermaid">${md.utils.escapeHtml(tokens[idx].content)}</pre>`;
+  const token = tokens[idx];
+  if (token.info.trim().toLowerCase() === "mermaid") {
+    const line = !exportRender && token.map ? ` data-line="${token.map[0]}"` : "";
+    return `<pre class="mermaid"${line}>${md.utils.escapeHtml(token.content)}</pre>`;
   }
   return defaultFenceRender(tokens, idx, options, env, self);
 };
@@ -534,6 +548,7 @@ function refreshActiveDirty() {
 // ---------- 预览渲染 ----------
 function renderPreview() {
   previewEl.innerHTML = md.render(editor.state.doc.toString());
+  lineAnchorsCache = null; // 预览重建，行映射锚点失效
   buildOutline();
   forceRepaint();
   // 预览被重建会清掉高亮，若正在预览中搜索则重新标注
@@ -904,7 +919,20 @@ function buildOutline() {
     item.textContent = h.textContent ?? "";
     item.title = item.textContent;
     item.style.paddingLeft = `${12 + (level - 1) * 14}px`;
-    item.addEventListener("click", () => h.scrollIntoView({ behavior: "smooth", block: "start" }));
+    item.addEventListener("click", () => {
+      // 两侧各自精确定位，暂停同步防互拽（覆盖平滑滚动时长）
+      suspendScrollSync(700);
+      h.scrollIntoView({ behavior: "smooth", block: "start" });
+      const line = Number(h.dataset.line);
+      if (Number.isFinite(line)) {
+        const doc = editor.state.doc;
+        const pos = doc.line(Math.min(doc.lines, line + 1)).from;
+        editor.dispatch({
+          selection: { anchor: pos },
+          effects: EditorView.scrollIntoView(pos, { y: "start" }),
+        });
+      }
+    });
     outlineEl.appendChild(item);
   });
 }
@@ -1206,12 +1234,12 @@ async function inlineMermaidForExport(html: string): Promise<string> {
 
 /** 渲染当前文档为自包含 HTML 文档字符串（图片保留原始路径）。 */
 async function buildExportHtml(title: string): Promise<string> {
-  rawImagePaths = true;
+  exportRender = true;
   let body: string;
   try {
     body = md.render(editor.state.doc.toString());
   } finally {
-    rawImagePaths = false;
+    exportRender = false;
   }
   body = await inlineMermaidForExport(body);
   const mathCss = body.includes('class="katex') ? KATEX_CDN_CSS : "";
@@ -1442,6 +1470,7 @@ async function exportPdf() {
   if (restoreDark) {
     ensureMermaidTheme(false);
     previewEl.innerHTML = md.render(editor.state.doc.toString());
+    lineAnchorsCache = null;
     await runMermaid();
   }
   window.print();
@@ -1451,11 +1480,143 @@ async function exportPdf() {
   }
 }
 
-// ---------- 滚动同步（编辑器 -> 预览）----------
-editor.scrollDOM.addEventListener("scroll", () => {
+// ---------- 滚动同步（行映射，双向）----------
+// 预览块级元素带 data-line（源码起始行），按「编辑器视口顶行 ↔ 锚点位置」在相邻
+// 锚点间线性插值，两个方向共用同一套映射；无锚点时回退比例同步。
+
+// 锚点缓存：只缓存元素引用（位置随图片/图表加载会变，滚动时实时测量），
+// 预览重建后置空、下次滚动懒重建。
+let lineAnchorsCache: { line: number; el: HTMLElement }[] | null = null;
+
+function lineAnchors(): { line: number; el: HTMLElement }[] {
+  if (!lineAnchorsCache) {
+    lineAnchorsCache = Array.from(previewEl.querySelectorAll<HTMLElement>("[data-line]"))
+      .map((el) => ({ line: Number(el.dataset.line), el }))
+      .filter((a) => Number.isFinite(a.line));
+  }
+  return lineAnchorsCache;
+}
+
+/** 锚点元素在预览滚动内容中的纵向偏移。 */
+function anchorTop(el: HTMLElement): number {
+  return el.getBoundingClientRect().top - previewPane.getBoundingClientRect().top + previewPane.scrollTop;
+}
+
+/** 编辑器视口顶部对应的源码行（0 基，含块内小数偏移）。 */
+function editorTopLine(): number {
+  const doc = editor.state.doc;
+  const y = Math.max(0, editor.scrollDOM.scrollTop - editor.documentPadding.top);
+  const block = editor.lineBlockAtHeight(y);
+  const start = doc.lineAt(block.from).number - 1;
+  const count = doc.lineAt(block.to).number - doc.lineAt(block.from).number + 1;
+  const frac = block.height > 0 ? Math.min(1, Math.max(0, (y - block.top) / block.height)) : 0;
+  return start + frac * count;
+}
+
+/** 把编辑器滚动到虚拟行（0 基，含小数）。 */
+function scrollEditorToLine(vline: number) {
+  const doc = editor.state.doc;
+  const n = Math.min(doc.lines, Math.max(1, Math.floor(vline) + 1));
+  const block = editor.lineBlockAt(doc.line(n).from);
+  editor.scrollDOM.scrollTop = editor.documentPadding.top + block.top + (vline - Math.floor(vline)) * block.height;
+}
+
+// 防回环：程序化 scrollTop 也会触发对侧 scroll 事件。谁先滚谁是 owner，
+// 对侧事件在 owner 存续期（120ms 内无新事件则释放）一律忽略。
+let scrollOwner: "editor" | "preview" | "lock" | null = null;
+let scrollOwnerTimer = 0;
+
+function claimScroll(who: "editor" | "preview"): boolean {
+  if (scrollOwner && scrollOwner !== who) return false;
+  scrollOwner = who;
+  clearTimeout(scrollOwnerTimer);
+  scrollOwnerTimer = window.setTimeout(() => (scrollOwner = null), 120);
+  return true;
+}
+
+/** 暂停双向同步一段时间（大纲跳转等两侧各自定位的场景，防互拽）。 */
+function suspendScrollSync(ms: number) {
+  scrollOwner = "lock";
+  clearTimeout(scrollOwnerTimer);
+  scrollOwnerTimer = window.setTimeout(() => (scrollOwner = null), ms);
+}
+
+function syncPreviewFromEditor() {
   const se = editor.scrollDOM;
-  const ratio = se.scrollTop / Math.max(1, se.scrollHeight - se.clientHeight);
-  previewPane.scrollTop = ratio * (previewPane.scrollHeight - previewPane.clientHeight);
+  const edMax = se.scrollHeight - se.clientHeight;
+  const pvMax = previewPane.scrollHeight - previewPane.clientHeight;
+  if (edMax <= 0 || pvMax <= 0) return;
+  // 两端强制对齐，避免插值误差让顶/底差半屏
+  if (se.scrollTop <= 1) return void (previewPane.scrollTop = 0);
+  if (se.scrollTop >= edMax - 1) return void (previewPane.scrollTop = pvMax);
+  const anchors = lineAnchors();
+  if (!anchors.length) return void (previewPane.scrollTop = (se.scrollTop / edMax) * pvMax);
+
+  const vline = editorTopLine();
+  // 二分找最后一个 line <= vline 的锚点（line 随文档流非降序）
+  let lo = 0,
+    hi = anchors.length - 1,
+    idx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (anchors[mid].line <= vline) {
+      idx = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  const prev = idx >= 0 ? anchors[idx] : null;
+  const next = idx + 1 < anchors.length ? anchors[idx + 1] : null;
+  const prevLine = prev ? prev.line : 0;
+  const prevTop = prev ? anchorTop(prev.el) : 0;
+  const nextLine = next ? next.line : editor.state.doc.lines;
+  const nextTop = next ? anchorTop(next.el) : previewPane.scrollHeight;
+  const t = nextLine > prevLine ? (vline - prevLine) / (nextLine - prevLine) : 0;
+  previewPane.scrollTop = Math.min(pvMax, Math.max(0, prevTop + t * (nextTop - prevTop)));
+}
+
+function syncEditorFromPreview() {
+  const se = editor.scrollDOM;
+  const edMax = se.scrollHeight - se.clientHeight;
+  const pvMax = previewPane.scrollHeight - previewPane.clientHeight;
+  if (edMax <= 0 || pvMax <= 0) return;
+  const sTop = previewPane.scrollTop;
+  if (sTop <= 1) return void (se.scrollTop = 0);
+  if (sTop >= pvMax - 1) return void (se.scrollTop = edMax);
+  const anchors = lineAnchors();
+  if (!anchors.length) return void (se.scrollTop = (sTop / pvMax) * edMax);
+
+  // 二分找视口顶部之上最近的锚点（元素随文档流位置非降序，直接比视口坐标）
+  const paneTop = previewPane.getBoundingClientRect().top;
+  let lo = 0,
+    hi = anchors.length - 1,
+    idx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (anchors[mid].el.getBoundingClientRect().top - paneTop <= 0.5) {
+      idx = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  const prev = idx >= 0 ? anchors[idx] : null;
+  const next = idx + 1 < anchors.length ? anchors[idx + 1] : null;
+  const prevLine = prev ? prev.line : 0;
+  const prevTop = prev ? anchorTop(prev.el) : 0;
+  const nextLine = next ? next.line : editor.state.doc.lines;
+  const nextTop = next ? anchorTop(next.el) : previewPane.scrollHeight;
+  const t = nextTop > prevTop ? (sTop - prevTop) / (nextTop - prevTop) : 0;
+  scrollEditorToLine(prevLine + t * (nextLine - prevLine));
+}
+
+editor.scrollDOM.addEventListener("scroll", () => {
+  if (!appEl.classList.contains("mode-split")) return; // 单栏时对侧隐藏，测量无效
+  if (!claimScroll("editor")) return;
+  syncPreviewFromEditor();
+});
+
+previewPane.addEventListener("scroll", () => {
+  if (!appEl.classList.contains("mode-split")) return;
+  if (!claimScroll("preview")) return;
+  syncEditorFromPreview();
 });
 
 // ---------- 会话持久化（重启恢复）----------
