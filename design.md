@@ -203,6 +203,10 @@ interface PersistedTab {
   把应用登记为可打开这些类型（出现在「打开方式」）。
 - **右键「用 Dotdown 打开」**：NSIS 安装钩子 `installer-hooks.nsh` 在
   `HKCU\...\SystemFileAssociations\.md\shell` 下写入菜单项，卸载时删除。
+- **「新建」子菜单 Markdown 项**：同一钩子注册 `.md\ShellNew`（NullFile），资源管理器
+  右键「新建」即可建空 `.md` 文件（原地改名，双击按默认程序打开）。曾考虑再加目录右键
+  「新建 Markdown 并打开」（`Directory\shell` + `--new` 参数一步建档并启动），因 Win11
+  精简菜单埋得深、与「新建→双击」习惯重复而放弃。
 - **打开流程**：双击/右键经命令行把文件路径传给应用。后端 `initial_file` 命令读取本次
   启动参数；已运行时，`tauri-plugin-single-instance` 捕获二次启动并 `emit("open-file")`
   转发到现有窗口 + 聚焦。前端在启动时调 `initial_file`、并 `listen("open-file")`，
