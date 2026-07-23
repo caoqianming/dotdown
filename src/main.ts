@@ -510,6 +510,8 @@ function renderTabs() {
       reorderTab(dragTabId, t.id);
     });
 
+    el.addEventListener("contextmenu", (e) => showTabMenu(e, t.id));
+
     const name = document.createElement("span");
     name.className = "tab-name";
     name.textContent = (isDirty(t) ? "● " : "") + nameOf(t);
@@ -653,6 +655,73 @@ async function closeTab(id: number) {
   }
   saveSession();
 }
+
+// ---------- 标签右键菜单 ----------
+const tabMenuEl = document.createElement("div");
+tabMenuEl.className = "tab-menu";
+tabMenuEl.hidden = true;
+document.body.appendChild(tabMenuEl);
+
+function closeTabMenu() {
+  tabMenuEl.hidden = true;
+}
+
+/** 依次关闭多个标签（未保存的逐个确认）。 */
+async function closeTabs(ids: number[]) {
+  for (const id of ids) await closeTab(id);
+}
+
+function showTabMenu(e: MouseEvent, id: number) {
+  e.preventDefault();
+  const t = tabs.find((x) => x.id === id);
+  if (!t) return;
+  const idx = tabs.indexOf(t);
+  const others = tabs.filter((x) => x.id !== id).map((x) => x.id);
+  const right = tabs.slice(idx + 1).map((x) => x.id);
+  const saved = tabs.filter((x) => !isDirty(x)).map((x) => x.id);
+
+  tabMenuEl.innerHTML = "";
+  const item = (label: string, run: (() => void) | null) => {
+    const btn = document.createElement("button");
+    btn.textContent = label;
+    if (run) {
+      btn.addEventListener("click", () => {
+        closeTabMenu();
+        run();
+      });
+    } else {
+      btn.disabled = true;
+    }
+    tabMenuEl.appendChild(btn);
+  };
+
+  item("关闭", () => void closeTab(id));
+  item("关闭其他标签", others.length ? () => void closeTabs(others) : null);
+  item("关闭右侧标签", right.length ? () => void closeTabs(right) : null);
+  item("关闭已保存标签", saved.length ? () => void closeTabs(saved) : null);
+  item("关闭全部标签", () => void closeTabs(tabs.map((x) => x.id)));
+  if (t.path) {
+    tabMenuEl.appendChild(document.createElement("hr"));
+    const path = t.path;
+    item("复制文件路径", () => void navigator.clipboard.writeText(path).catch(() => {}));
+  }
+
+  // 先显示再测量，贴着鼠标定位并防止超出窗口
+  tabMenuEl.style.left = "0px";
+  tabMenuEl.style.top = "0px";
+  tabMenuEl.hidden = false;
+  const r = tabMenuEl.getBoundingClientRect();
+  tabMenuEl.style.left = Math.max(0, Math.min(e.clientX, window.innerWidth - r.width - 4)) + "px";
+  tabMenuEl.style.top = Math.max(0, Math.min(e.clientY, window.innerHeight - r.height - 4)) + "px";
+}
+
+document.addEventListener("mousedown", (e) => {
+  if (!tabMenuEl.hidden && !tabMenuEl.contains(e.target as Node)) closeTabMenu();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !tabMenuEl.hidden) closeTabMenu();
+});
+window.addEventListener("blur", closeTabMenu);
 
 // ---------- 文件操作 ----------
 async function openFile() {

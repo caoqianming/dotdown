@@ -403,6 +403,17 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 
 存储沿用「一项一个 `localStorage` key」的既有风格（未合并成单对象），只是 UI 收敛到一个弹窗。
 
+### 4.23 标签右键菜单（v0.3.5）
+
+标签 `contextmenu` 弹出自绘菜单（单例 `div.tab-menu`，`position: fixed`，每次打开重建菜单项）：
+
+- **关闭 / 关闭其他 / 关闭右侧 / 关闭已保存 / 关闭全部**：先按当前 `tabs` 数组算出目标 id 列表，
+  无目标的项渲染为 disabled；批量关闭 `closeTabs(ids)` 逐个 `await closeTab(id)` 复用其全部
+  逻辑（dirty 二次确认、激活相邻、关到 0 自动补空白标签、saveSession）。
+- **复制文件路径**：仅有 `path` 的标签显示（`navigator.clipboard`）。
+- **定位**：贴鼠标 `clientX/Y`，先显示后测量 `getBoundingClientRect` 再钳制到窗口内防出界。
+- **关闭时机**：点击菜单外（`mousedown`）、Esc、窗口失焦；选中任一项后先关菜单再执行。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |

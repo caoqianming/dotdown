@@ -361,6 +361,48 @@ body {
   color: var(--accent);
 }
 
+/* ---------- 标签右键菜单 ---------- */
+.tab-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.tab-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: none !important;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab-menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.tab-menu button:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tab-menu hr {
+  margin: 4px 6px;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
 /* ---------- 图标按钮（大纲 / 查找 / 主题 / 关于）---------- */
 #btn-outline,
 #btn-search,
