@@ -16,6 +16,15 @@
 
 ## 2026-07-23
 
+### 已发布：v0.3.5（GitHub；Gitee 待下午补）
+- 版本号三处同步升至 0.3.5（package.json / tauri.conf.json / Cargo.toml），
+  `tauri build` 出 `Dotdown_0.3.5_x64-setup.exe`（NSIS 4.54MB）与免安装 `dotdown.exe`（11.56MB）。
+- tag `v0.3.5` 推 GitHub，REST API 建 Release 并上传两资产：
+  <https://github.com/caoqianming/dotdown/releases/tag/v0.3.5>。
+- 坑：PowerShell `Invoke-RestMethod` 不认会话内设置的 `HTTP_PROXY` 环境变量（.NET 代理
+  在进程启动时定型），须显式传 `-Proxy "http://127.0.0.1:7897"`。
+- 上午 Gitee 照例连不上：源码推送、tag 与 Release **待下午补**。
+
 ### 新功能：标签右键菜单
 - 标签上右键弹出自绘菜单：关闭 / 关闭其他 / 关闭右侧 / 关闭已保存 / 关闭全部，
   有路径的标签另有「复制文件路径」；无可关对象的项置灰。
