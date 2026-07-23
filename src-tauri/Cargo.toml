@@ -1,6 +1,6 @@
 [package]
 name = "dotdown"
-version = "0.3.4"
+version = "0.3.5"
 description = "Dotdown —— Markdown 预览/编辑小工具"
 authors = ["you"]
 edition = "2021"
