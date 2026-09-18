@@ -16,7 +16,7 @@
 
 ## 2026-09-18
 
-### 已发布：v0.3.6（GitHub）
+### 已发布：v0.3.6（GitHub + Gitee）
 - 再次双击 Markdown 文件时，现有窗口先显示并解除最小化，再聚焦到前台。
 - 支持 `\(...\)` 行内与 `\[...\]` 块级公式，预览与 HTML 导出共用；保留代码、转义和原有美元分隔符行为。
 - 新增 6 项公式解析回归测试，`node --test tests/math-delimiters.test.mjs` 通过；前端构建与 Rust 编译检查通过。
@@ -24,7 +24,9 @@
 - `npm run tauri build` 通过，生成 `Dotdown_0.3.6_x64-setup.exe` 与免安装 `dotdown.exe`。
 - 源码与 tag 已推送 GitHub，Release 两项资产均核对大小及 SHA-256 后发布：
   <https://github.com/caoqianming/dotdown/releases/tag/v0.3.6>。
-- 按上午网络约定，Gitee 镜像暂未同步。
+- Gitee 源码、tag 与两项发布资产已同步：
+  <https://gitee.com/caoqianming/dotdown/releases/tag/v0.3.6>。
+- 根据用户确认更新网络约定：北京时间上午 9 点后即可推送 Gitee，无需等下午。
 
 ## 2026-07-23
 
