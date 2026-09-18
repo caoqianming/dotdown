@@ -13,22 +13,35 @@ function findClosing(source: string, delimiter: string, start: number, end: numb
 
 /** Add LaTeX delimiters, reusing the KaTeX plugin's math token renderers. */
 export default function mathDelimiters(md: MarkdownIt): void {
+  // Display math can also occur inside a paragraph (including lazy list
+  // continuations). Keep the renderer's options, but use a phrasing wrapper
+  // so it does not produce a nested <p> inside the surrounding paragraph.
+  md.renderer.rules.latex_math_display = (tokens, index, options, env, renderer) =>
+    md.renderer.rules.math_block!(tokens, index, options, env, renderer)
+      .replace(/^<p\b/, "<span")
+      .replace(/<\/p>\n?$/, "</span>");
+
   // Run before Markdown consumes backslashes as punctuation escapes.
   md.inline.ruler.before("escape", "latex_math_inline", (state, silent) => {
-    if (state.src.slice(state.pos, state.pos + 2) !== "\\(") return false;
+    const opening = state.src.slice(state.pos, state.pos + 2);
+    if (opening !== "\\(" && opening !== "\\[") return false;
+    const display = opening === "\\[";
     const start = state.pos + 2;
-    const close = findClosing(state.src, "\\)", start, state.posMax);
+    const close = findClosing(state.src, display ? "\\]" : "\\)", start, state.posMax);
     if (close < 0 || !state.src.slice(start, close).trim()) return false;
     if (!silent) {
-      const token = state.push("math_inline", "math", 0);
+      const token = state.push(display ? "latex_math_display" : "math_inline", "math", 0);
       token.content = state.src.slice(start, close);
-      token.markup = "\\(";
+      token.markup = opening;
     }
     state.pos = close + 2;
     return true;
   });
 
   md.block.ruler.before("fence", "latex_math_block", (state, start, end, silent) => {
+    // Let unindented list continuations stay in their paragraph; the inline
+    // rule handles their math without breaking list numbering or membership.
+    if (state.sCount[start] < state.blkIndent) return false;
     if (state.sCount[start] - state.blkIndent >= 4) return false;
     const pos = state.bMarks[start] + state.tShift[start];
     if (state.src.slice(pos, pos + 2) !== "\\[") return false;

@@ -68,3 +68,70 @@ test("existing dollar math still renders", () => {
   assert.match(md.render("$x^2$"), /class="katex"/);
   assert.match(md.render("$$\nx^2\n$$"), /class="katex-display"/);
 });
+
+test("screenshot display formulas in unindented numbered-list continuations", () => {
+  const html = md.render(String.raw`### 14. 面心立方滑移系
+1) 单位位错柏氏矢量：
+\[
+\vec b=\frac{a}{2}[011]
+\]
+2) 纯刃位错时，位错线方向：
+\[
+\vec t=\vec b\times\vec n=[011]\times[111]=[\bar{1}1\bar{1}]
+\]
+纯螺位错时，位错线方向平行于柏氏矢量：
+\[
+\vec t=[011]
+\]
+
+### 15. 二元相图题
+1) 合金为过共晶合金。
+若共晶点50%B，则：
+\[
+\beta_{\text{初}}\%=\frac{80-50}{90-50}=75\%
+\]
+\[
+\text{共晶组织}\%=25\%
+\]
+相组成物：
+\[
+\alpha\%=\frac{90-80}{90-5}\approx11.8\%
+\]
+\[
+\beta\%\approx88.2\%
+\]
+2) 冷却速度越快。
+3) 扩散退火温度。`);
+  assert.equal((html.match(/class="katex-display"/g) ?? []).length, 7);
+  assert.doesNotMatch(html, /katex-error/);
+  assert.equal((html.match(/<ol>/g) ?? []).length, 2);
+  assert.equal((html.match(/<li>/g) ?? []).length, 5);
+  assert.match(html, /<li>冷却速度越快。<\/li>/);
+  assert.match(html, /<li>扩散退火温度。<\/li>/);
+});
+
+test("display math embedded in prose and loose list paragraphs", () => {
+  for (const source of [
+    String.raw`前文\[x^2\]后文`,
+    "1. 前文\n\\[\nx^2\n\\]\n后文\n\n2. 下一项",
+  ]) {
+    const html = md.render(source);
+    assert.equal((html.match(/class="katex-display"/g) ?? []).length, 1);
+    assert.match(html, /后文/);
+    assert.doesNotMatch(html, /<p class="katex-block">/);
+    assert.match(html, /<span class="katex-block">/);
+  }
+});
+
+test("display fallback respects code, escaping and paragraph boundaries", () => {
+  for (const source of [
+    "`" + String.raw`\[x\]` + "`",
+    String.raw`前文\\[x\\]后文`,
+    String.raw`前文\[x`,
+    "前文\\[x\n\n下一段\\]",
+    "1. 前文\\[x\n2. 下一项\\]",
+  ]) assert.doesNotMatch(md.render(source), /class="katex/);
+  const tokens = md.parseInline(String.raw`前文\[a\\]b\]后文`, {})[0].children;
+  assert.equal(tokens[1].type, "latex_math_display");
+  assert.equal(tokens[1].content, String.raw`a\\]b`);
+});

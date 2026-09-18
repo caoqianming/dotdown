@@ -357,6 +357,8 @@ interface PersistedTab {
 **数学公式（KaTeX）**：接入 `@vscode/markdown-it-katex` 插件，`$...$` 行内、`$$...$$` 块级。
 `math-delimiters.ts` 补充 `\(...\)` 行内和 `\[...\]` 块级解析，在 Markdown 转义前生成相同数学 token，
 保留代码与转义文本；未闭合分隔符回退为普通 Markdown。预览与导出共用此解析器。
+段落内及列表未缩进续行中的 `\[...\]` 也按块级公式渲染，保留列表编号与归属；
+段落内使用 span 包装，避免嵌套 p 标签破坏正文结构。
 KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无需后处理。样式由
 `import "katex/dist/katex.min.css"`（Vite 打包，字体随包）。`throwOnError:false` 让非法
 公式原样显示红字而非抛错。块级公式 `.katex-display` 居中、长公式可横向滚动。
