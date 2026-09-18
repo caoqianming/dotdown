@@ -103,6 +103,9 @@ pub fn run() {
                 let _ = app.emit("open-file", path);
             }
             if let Some(w) = app.get_webview_window("main") {
+                // 聚焦不会解除最小化，先显示并恢复窗口，再将它带到前台。
+                let _ = w.show();
+                let _ = w.unminimize();
                 let _ = w.set_focus();
             }
         }))
