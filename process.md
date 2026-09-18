@@ -16,11 +16,15 @@
 
 ## 2026-09-18
 
-### v0.3.7：修复列表中的块级公式
+### 已发布：v0.3.7（GitHub + Gitee）
 - 修复编号列表未缩进续行及段落内的 `\[...\]` 显示为原始文本的问题，保留列表编号与归属。
 - 使用 span 包装段落内公式，避免嵌套 p 标签；预览和 HTML 导出共用修复。
 - 按截图增加多公式列表、段落内公式、代码、转义及段落边界测试，全部 9 项通过。
 - 同步应用版本及 npm/Cargo 锁文件至 0.3.7。
+- `npm run tauri build` 通过，生成 Windows x64 安装包与免安装版。
+- 源码及标签已同步 GitHub 和 Gitee，两端发布资产均通过 SHA-256 校验：
+  <https://github.com/caoqianming/dotdown/releases/tag/v0.3.7>、
+  <https://gitee.com/caoqianming/dotdown/releases/tag/v0.3.7>。
 
 ### 已发布：v0.3.6（GitHub + Gitee）
 - 再次双击 Markdown 文件时，现有窗口先显示并解除最小化，再聚焦到前台。
