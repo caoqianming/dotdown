@@ -26,6 +26,7 @@ import MarkdownIt from "markdown-it";
 // @ts-expect-error: 该插件无类型声明
 import taskLists from "markdown-it-task-lists";
 import katexPlugin from "@vscode/markdown-it-katex";
+import mathDelimiters from "./math-delimiters";
 import hljs from "highlight.js";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
@@ -102,8 +103,9 @@ const md = new MarkdownIt({
   },
 })
   .use(taskLists, { enabled: true, label: true })
-  // 数学公式：$...$ 行内、$$...$$ 块级（KaTeX 同步渲染为 HTML）
-  .use(katexPlugin, { throwOnError: false });
+  // 数学公式：$...$ / \(...\) 行内，$$...$$ / \[...\] 块级。
+  .use(katexPlugin, { throwOnError: false })
+  .use(mathDelimiters);
 
 // ---------- Mermaid 图表 ----------
 // 标记当前已初始化的 mermaid 主题，避免重复 initialize。
