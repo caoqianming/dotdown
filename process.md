@@ -14,6 +14,15 @@
 
 ---
 
+## 2026-09-18
+
+### v0.3.6 修复
+- 再次双击 Markdown 文件时，现有窗口先显示并解除最小化，再聚焦到前台。
+- 支持 `\(...\)` 行内与 `\[...\]` 块级公式，预览与 HTML 导出共用；保留代码、转义和原有美元分隔符行为。
+- 新增 6 项公式解析回归测试，`node --test tests/math-delimiters.test.mjs` 通过；前端构建与 Rust 编译检查通过。
+- 同步应用版本及 npm/Cargo 锁文件至 0.3.6。
+- `npm run tauri build` 通过，生成 `Dotdown_0.3.6_x64-setup.exe` 与免安装 `dotdown.exe`。
+
 ## 2026-07-23
 
 ### 已发布：v0.3.5（GitHub；Gitee 待下午补）
