@@ -418,6 +418,15 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 - **定位**：贴鼠标 `clientX/Y`，先显示后测量 `getBoundingClientRect` 再钳制到窗口内防出界。
 - **关闭时机**：点击菜单外（`mousedown`）、Esc、窗口失焦；选中任一项后先关菜单再执行。
 
+### 4.24 代码库与 Git 阅读
+
+- `src/repository.ts` 管理文件夹侧栏：按目录懒加载、返回上级、筛选当前目录；文件复用现有标签、最近打开和会话恢复。
+- `src-tauri/src/repository.rs` 提供目录、Git 状态和差异命令；目录路径 canonicalize 后校验边界，跳过符号链接和 `.git`。
+- Markdown / TXT 保留编辑预览；其他文本通过 CodeMirror 只读状态显示，按文件名 / 扩展名加载语言包，禁用保存、替换、导出及图片插入。
+- Git 通过系统 `git` 查询分支、porcelain v1 NUL 分隔状态及最近 30 条提交；差异分工作区和暂存区，未跟踪文件显示内容。
+- 子进程不经 shell，使用 literal pathspec，禁用外部 diff、textconv、fsmonitor 和可选索引写入；查询超时 10 秒、输出上限 2 MiB。
+- 文本文件限制为 UTF-8、2 MiB，拒绝含 NUL 的二进制内容；文件名和差异使用 `textContent` 展示，异步结果通过序号丢弃过期响应。
+
 ## 5. 快捷键
 
 | 快捷键 | 功能 |
@@ -463,8 +472,9 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 - [x] 数学公式 + 流程图（KaTeX / Mermaid，见 §4.21）
 - [x] 统一设置面板（主题 / 字号 / 换行 / 大纲，见 §4.22）
 - [x] 双向滚动同步 + 大纲定位编辑器（源码行 ↔ 预览行映射，见 §4.7）
+- [x] 文件夹浏览、源码只读高亮、Git 状态 / 差异 / 最近提交（见 §4.24）
 - [ ] Markdown 编辑增强（Ctrl+B/I 格式化、列表自动续行、Tab 缩进）
-- [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义 / 文件树侧栏（前置：拆分 main.ts 模块）
+- [ ] 待定：大纲拖拽 / 多窗口 / 主题自定义 / 可展开文件树
 
 ## 8. 关键设计决策记录
 

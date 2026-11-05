@@ -1071,6 +1071,8 @@ body.is-resizing {
   .toolbar,
   .tabbar,
   .outline,
+  .repository,
+  #git-dialog,
   .pane-editor,
   .divider,
   .search-bar,
@@ -1116,4 +1118,52 @@ body.is-resizing {
   .markdown-body h3 {
     break-after: avoid;
   }
+}
+
+/* 文件夹与 Git 阅读侧栏 */
+.repository {
+  flex: 0 0 clamp(200px, 24vw, 320px);
+  min-width: 0;
+  overflow: auto;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-alt);
+  font-size: 12px;
+}
+.repository[hidden] { display: none; }
+.repository-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.repository-heading strong { overflow-wrap: anywhere; }
+.repository button, #git-dialog button {
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+.repository button:hover, #git-dialog button:hover { background: var(--hover); }
+.repository-path { margin: 10px 0; overflow-wrap: anywhere; color: var(--muted); }
+#repository-filter { width: 100%; padding: 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--text); background: var(--bg); }
+.repository-files { margin: 8px 0 16px; }
+.repository-files button { display: block; width: 100%; text-align: left; border: 0; background: transparent; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repository details { border-top: 1px solid var(--border); padding: 10px 0; }
+.repository summary { cursor: pointer; font-weight: 600; }
+#repository-info { color: var(--muted); overflow-wrap: anywhere; }
+.repository-change { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.repository-change span { width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-family: Consolas, monospace; }
+#repository-history { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; font-size: 12px; }
+#git-dialog { width: min(1000px, 90vw); max-height: 85vh; padding: 16px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--bg); }
+#git-dialog::backdrop { background: rgb(0 0 0 / 40%); }
+#git-content { overflow: auto; max-height: 65vh; font: 13px/1.6 Consolas, monospace; tab-size: 4; }
+#git-content span { display: block; min-height: 1.6em; white-space: pre; }
+.diff-added { background: rgb(46 160 67 / 16%); }
+.diff-removed { background: rgb(248 81 73 / 16%); }
+.diff-hunk { color: var(--accent); background: var(--bg-alt); }
+.source-reading .pane-preview, .source-reading .divider, .source-reading .outline { display: none; }
+#app.source-reading .pane-editor { display: block; flex: 1; border: 0; }
+.source-reading #doc-title::before { content: '只读 · '; color: var(--accent); }
+.toolbar button:disabled { opacity: .4; cursor: default; }
+@media (max-width: 900px) {
+  .toolbar { flex-wrap: wrap; gap: 3px; }
+  .toolbar .title { flex-basis: 100%; order: 1; }
 }

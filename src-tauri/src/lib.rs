@@ -2,11 +2,12 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
+mod repository;
 
 /// 读取磁盘上的文本文件，返回内容。
 #[tauri::command]
 fn read_file(path: String) -> Result<String, String> {
-    fs::read_to_string(&path).map_err(|e| format!("读取失败: {e}"))
+    repository::read_text(Path::new(&path))
 }
 
 /// 把内容写入磁盘文件（覆盖写入）。
@@ -117,6 +118,9 @@ pub fn run() {
             write_bytes,
             copy_file,
             initial_file,
+            repository::repository_entries,
+            repository::repository_git,
+            repository::repository_diff,
             fix_webview_paint
         ])
         .run(tauri::generate_context!())

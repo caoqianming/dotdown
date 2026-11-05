@@ -27,6 +27,7 @@ import MarkdownIt from "markdown-it";
 import taskLists from "markdown-it-task-lists";
 import katexPlugin from "@vscode/markdown-it-katex";
 import mathDelimiters from "./math-delimiters";
+import { setupRepository } from "./repository";
 import hljs from "highlight.js";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
@@ -400,12 +401,33 @@ const onChange = EditorView.updateListener.of((u) => {
   if (u.docChanged || u.selectionSet) updateWordCount();
 });
 
-function makeState(doc: string): EditorState {
+const languageCompartment = new Compartment();
+
+function isSource(path: string | null | undefined): boolean {
+  return !!path && !/\.(md|markdown|mdown|txt)$/i.test(path);
+}
+
+async function configureLanguage(t: Tab) {
+  if (!isSource(t.path)) return;
+  const filename = baseNameOf(t.path!);
+  const extension = filename.split(".").pop()!.toLowerCase();
+  const language = languages.find((l) => l.filename?.test(filename) || l.extensions.includes(extension));
+  if (!language) return;
+  try {
+    const support = await language.load();
+    if (activeId === t.id && isSource(t.path)) {
+      editor.dispatch({ effects: languageCompartment.reconfigure(support) });
+    }
+  } catch { /* 未提供语法包时仍可阅读纯文本 */ }
+}
+
+function makeState(doc: string, path: string | null = null): EditorState {
   return EditorState.create({
     doc,
     extensions: [
       basicSetup,
-      markdown({ base: markdownLanguage, codeLanguages: languages }),
+      languageCompartment.of(isSource(path) ? [] : markdown({ base: markdownLanguage, codeLanguages: languages })),
+      EditorState.readOnly.of(isSource(path)),
       themeCompartment.of(editorThemeExt()),
       fontCompartment.of(editorFontExt()),
       wrapCompartment.of(editorWrapExt()),
@@ -551,6 +573,12 @@ function refreshActiveDirty() {
 
 // ---------- 预览渲染 ----------
 function renderPreview() {
+  if (isSource(activeTab()?.path)) {
+    previewEl.replaceChildren();
+    outlineEl.replaceChildren();
+    lineAnchorsCache = null;
+    return;
+  }
   previewEl.innerHTML = md.render(editor.state.doc.toString());
   lineAnchorsCache = null; // 预览重建，行映射锚点失效
   buildOutline();
@@ -588,7 +616,7 @@ function updateTitle() {
 // ---------- 标签操作 ----------
 /** 仅创建并加入标签，不激活（供新建与会话恢复复用）。 */
 function createTab(path: string | null, content: string, lastSaved: string): Tab {
-  const t: Tab = { id: ++tabSeq, path, lastSaved, state: makeState(content) };
+  const t: Tab = { id: ++tabSeq, path, lastSaved, state: makeState(content, path) };
   tabs.push(t);
   return t;
 }
@@ -601,11 +629,18 @@ function activate(id: number) {
     editor.setState(t.state);
     // 该标签的 state 可能在不同主题/字号下创建，换入后对齐当前设置
     reconfigureEditor();
+    void configureLanguage(t);
+  }
+  const source = isSource(t?.path);
+  appEl.classList.toggle("source-reading", source);
+  for (const id of ["btn-save", "btn-saveas", "btn-export", "mode-editor", "mode-split", "mode-preview", "btn-outline"]) {
+    (document.getElementById(id) as HTMLButtonElement).disabled = source;
   }
   renderTabs();
   renderPreview();
   updateTitle();
   updateWordCount();
+  if (!searchBar.hidden) runSearch();
   editor.focus();
 }
 
@@ -729,7 +764,7 @@ window.addEventListener("blur", closeTabMenu);
 async function openFile() {
   const selected = await open({
     multiple: false,
-    filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdown", "txt"] }],
+    filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdown", "txt"] }, { name: "所有文件", extensions: ["*"] }],
   });
   if (typeof selected === "string") {
     await loadPath(selected);
@@ -758,14 +793,14 @@ async function loadPath(path: string) {
 
 async function saveFile() {
   const t = activeTab();
-  if (!t) return;
+  if (!t || isSource(t.path)) return;
   if (!t.path) return saveFileAs();
   await writeTo(t, t.path);
 }
 
 async function saveFileAs() {
   const t = activeTab();
-  if (!t) return;
+  if (!t || isSource(t.path)) return;
   const path = await save({
     defaultPath: t.path ?? "未命名.md",
     filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
@@ -825,6 +860,7 @@ function ensureVisibleForEdit() {
  * 文档尚未保存（无路径）时退回内联 base64，保证仍能显示。
  */
 async function insertPastedImage(bytes: Uint8Array, mime: string) {
+  if (isSource(activeTab()?.path)) return;
   // 未保存文档没有同级目录可放 assets/——先让用户保存，避免退回臃肿的内联 base64
   if (!activeTab()?.path) {
     await message("粘贴图片前请先保存文档：图片会存到文档同级 assets/ 目录。", {
@@ -849,6 +885,7 @@ async function insertPastedImage(bytes: Uint8Array, mime: string) {
 
 /** 把拖入的图片文件复制到文档同级 assets/ 并插入相对引用；无文档路径则引用原始绝对路径。 */
 async function insertDroppedImage(srcPath: string) {
+  if (isSource(activeTab()?.path)) return;
   const t = activeTab();
   const name = baseNameOf(srcPath);
   ensureVisibleForEdit();
@@ -1037,6 +1074,7 @@ let previewIdx = -1;
 
 /** 当前搜索目标：预览模式搜预览，否则（编辑/分栏）搜编辑器。 */
 function searchTarget(): "editor" | "preview" {
+  if (isSource(activeTab()?.path)) return "editor";
   return appEl.classList.contains("mode-preview") ? "preview" : "editor";
 }
 
@@ -1047,6 +1085,7 @@ function searchQuery(): SearchQuery {
 
 /** 展开/收起替换行；替换仅对编辑器有效，预览模式下隐藏整块。 */
 function setReplaceOpen(open: boolean) {
+  if (isSource(activeTab()?.path)) open = false;
   replaceRow.hidden = !open;
   replaceToggle.textContent = open ? "▾" : "▸";
   replaceToggle.classList.toggle("open", open);
@@ -1054,7 +1093,7 @@ function setReplaceOpen(open: boolean) {
 
 /** 预览模式无法替换：隐藏替换切换与替换行。 */
 function updateReplaceAvailability() {
-  const preview = searchTarget() === "preview";
+  const preview = searchTarget() === "preview" || isSource(activeTab()?.path);
   replaceToggle.hidden = preview;
   if (preview) replaceRow.hidden = true;
 }
@@ -1062,7 +1101,7 @@ function updateReplaceAvailability() {
 function openSearch(withReplace = false) {
   searchBar.hidden = false;
   updateReplaceAvailability();
-  if (withReplace && searchTarget() === "editor") setReplaceOpen(true);
+  if (withReplace && searchTarget() === "editor" && !isSource(activeTab()?.path)) setReplaceOpen(true);
   searchInput.focus();
   searchInput.select();
   runSearch();
@@ -1093,6 +1132,7 @@ function runSearch() {
 
 /** 替换当前匹配（仅编辑器）。 */
 function replaceOne() {
+  if (isSource(activeTab()?.path)) return;
   if (searchTarget() !== "editor" || !searchInput.value) return;
   editor.dispatch({ effects: setSearchQuery.of(searchQuery()) });
   replaceNext(editor);
@@ -1101,6 +1141,7 @@ function replaceOne() {
 
 /** 替换全部匹配（仅编辑器）。 */
 function replaceAllMatches() {
+  if (isSource(activeTab()?.path)) return;
   if (searchTarget() !== "editor" || !searchInput.value) return;
   editor.dispatch({ effects: setSearchQuery.of(searchQuery()) });
   replaceAll(editor);
@@ -1333,6 +1374,7 @@ ${body}</article>
 }
 
 async function exportHtml() {
+  if (isSource(activeTab()?.path)) return;
   const t = activeTab();
   const stem = t && t.path ? nameOf(t).replace(/\.[^.]+$/, "") : "未命名";
   const path = await save({
@@ -1532,6 +1574,7 @@ window.addEventListener("afterprint", () => {
 });
 
 async function exportPdf() {
+  if (isSource(activeTab()?.path)) return;
   const t = activeTab();
   // 用文件名作为 PDF 默认文件名（去扩展名），打印结束后还原
   titleBeforePrint = document.title;
@@ -2005,12 +2048,13 @@ let checkingExternal = false;
 function reloadTabFromDisk(t: Tab, disk: string) {
   t.lastSaved = disk;
   if (t.id === activeId) {
-    editor.setState(makeState(disk));
+    editor.setState(makeState(disk, t.path));
     reconfigureEditor();
+    void configureLanguage(t);
     renderPreview();
     updateWordCount();
   } else {
-    t.state = makeState(disk);
+    t.state = makeState(disk, t.path);
   }
 }
 
@@ -2060,6 +2104,7 @@ async function checkExternalChanges() {
 
 // ---------- 初始化 ----------
 async function init() {
+  setupRepository(loadPath);
   applyTheme();
   applyPreviewFont(); // 恢复预览字号（编辑器字号/换行已在建 state 时生效）
   applySplit(readSplit()); // 恢复上次的分栏宽度比例

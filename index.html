@@ -29,6 +29,8 @@
         <div class="group">
           <button id="btn-new" title="新建 (Ctrl+N)">新建</button>
           <button id="btn-open" title="打开 (Ctrl+O)">打开</button>
+          <button id="btn-folder" title="打开代码库或普通文件夹">打开文件夹</button>
+          <button id="btn-repository" title="显示或隐藏文件与 Git 侧栏" aria-expanded="false">仓库</button>
           <div class="recent-wrap">
             <button id="btn-recent" title="最近打开">最近 ▾</button>
             <div id="recent-menu" class="recent-menu" hidden></div>
@@ -81,6 +83,14 @@
             </div>
           </div>
         </div>
+        <aside id="repository" class="repository" aria-label="代码库" hidden>
+          <div class="repository-heading"><strong>文件与 Git</strong><button id="repository-refresh" title="刷新文件和 Git">刷新</button></div>
+          <div id="repository-title" class="repository-path">尚未打开文件夹</div>
+          <input id="repository-filter" aria-label="筛选当前目录" placeholder="筛选当前目录…" type="search" />
+          <div id="repository-files" class="repository-files"></div>
+          <details open><summary>Git 变更</summary><p id="repository-info" role="status"></p><div id="repository-changes"></div></details>
+          <details><summary>最近 30 条提交</summary><pre id="repository-history"></pre></details>
+        </aside>
         <aside id="outline" class="outline"></aside>
         <section class="pane pane-editor"><div id="editor"></div></section>
         <div class="divider"></div>
@@ -92,6 +102,11 @@
         <span id="status-words" class="status-words"></span>
       </footer>
     </div>
+
+    <dialog id="git-dialog" aria-labelledby="git-title">
+      <div class="repository-heading"><strong id="git-title"></strong><button id="git-close">关闭</button></div>
+      <pre id="git-content" tabindex="0"></pre>
+    </dialog>
 
     <!-- 关于 / 帮助 弹窗 -->
     <div id="about-overlay" class="modal-overlay" hidden>
@@ -118,6 +133,7 @@
 
         <h3>功能</h3>
         <ul class="about-list">
+          <li><b>代码库阅读</b>：打开文件夹浏览源码，查看 Git 分支、变更、暂存区 / 工作区差异和最近提交；源码以只读方式打开</li>
           <li><b>分栏编辑</b>：左侧源码（CodeMirror）+ 右侧实时预览（markdown-it）</li>
           <li><b>多标签页</b>：并行打开多个文档，按路径去重，未保存以 ● 标记</li>
           <li><b>会话恢复</b>：重启自动还原上次打开的标签</li>
