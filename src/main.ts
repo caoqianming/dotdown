@@ -164,21 +164,23 @@ function dirOf(p: string): string {
 /** 以 baseDir 为基准解析相对路径，归一 . 与 ..，保留原平台分隔符。 */
 function resolvePath(baseDir: string, rel: string): string {
   const sep = baseDir.includes("\\") ? "\\" : "/";
+  const prefix = baseDir.startsWith("\\\\") ? "\\\\" : baseDir.startsWith("/") ? "/" : "";
+  const rootParts = prefix === "\\\\" ? 2 : /^[a-z]:/i.test(baseDir) ? 1 : 0;
   const parts = (baseDir + "/" + rel).split(/[\\/]+/);
   const out: string[] = [];
   for (const part of parts) {
     if (part === "" || part === ".") continue;
     if (part === "..") {
-      if (out.length && out[out.length - 1] !== "..") out.pop();
+      if (out.length > rootParts) out.pop();
       continue;
     }
     out.push(part);
   }
-  return out.join(sep);
+  return prefix + out.join(sep);
 }
 
 /** 把 Markdown 里的本地图片 src 转成 WebView 可加载的 asset:// URL。 */
-function resolveLocalImage(src: string): string {
+function resolveLocalImage(src: string, path?: string | null): string {
   let p = src;
   try {
     p = decodeURI(src);
@@ -186,7 +188,7 @@ function resolveLocalImage(src: string): string {
     /* 非法转义就用原串 */
   }
   if (isAbsolutePath(p)) return convertFileSrc(p);
-  const base = activeTab()?.path ? dirOf(activeTab()!.path!) : "";
+  const base = path ? dirOf(path) || (path.startsWith("/") ? "/" : "") : "";
   if (!base) return src; // 未保存的新文档无目录，无法定位相对路径
   return convertFileSrc(resolvePath(base, p));
 }
@@ -216,7 +218,7 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const i = token.attrIndex("src");
   if (i >= 0 && token.attrs) {
     const src = token.attrs[i][1];
-    if (!exportRender && !isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src);
+    if (!exportRender && !isExternalSrc(src)) token.attrs[i][1] = resolveLocalImage(src, activeTab()?.path);
   }
   return defaultImageRender(tokens, idx, options, env, self);
 };
@@ -1344,16 +1346,19 @@ async function inlineMermaidForExport(html: string): Promise<string> {
   return doc.body.innerHTML;
 }
 
-/** 渲染当前文档为自包含 HTML 文档字符串（图片保留原始路径）。 */
-async function buildExportHtml(title: string): Promise<string> {
+/** 导出时渲染文档正文，保留原始图片路径。 */
+function renderExportBody(source: string): string {
   exportRender = true;
-  let body: string;
   try {
-    body = md.render(editor.state.doc.toString());
+    return md.render(source);
   } finally {
     exportRender = false;
   }
-  body = await inlineMermaidForExport(body);
+}
+
+/** 渲染当前文档为自包含 HTML 文档字符串（图片保留原始路径）。 */
+async function buildExportHtml(title: string): Promise<string> {
+  const body = await inlineMermaidForExport(renderExportBody(editor.state.doc.toString()));
   const mathCss = body.includes('class="katex') ? KATEX_CDN_CSS : "";
   const safeTitle = md.utils.escapeHtml(title);
   return `<!doctype html>
@@ -1386,6 +1391,28 @@ async function exportHtml() {
     await invoke("write_file", { path, content: await buildExportHtml(stem) });
   } catch (e) {
     await message(String(e), { title: "导出 HTML 失败", kind: "error" });
+  }
+}
+
+async function exportDocx() {
+  const tab = activeTab();
+  if (!tab || isSource(tab.path)) return;
+  const source = docOf(tab);
+  const sourcePath = tab.path;
+  const name = nameOf(tab);
+  const stem = name.replace(/\.[^.]+$/, "") || "未命名";
+  try {
+    const path = await save({
+      defaultPath: sourcePath ? `${sourcePath.slice(0, -name.length)}${stem}.docx` : `${stem}.docx`,
+      filters: [{ name: "Word 文档", extensions: ["docx"] }],
+    });
+    if (!path) return;
+    const { buildDocx } = await import("./docx-export");
+    const buffer = await buildDocx(renderExportBody(source), stem, (src) =>
+      src && !isExternalSrc(src) ? resolveLocalImage(src, sourcePath) : src);
+    await invoke("write_bytes", { path, bytes: Array.from(new Uint8Array(buffer)) });
+  } catch (e) {
+    await message(String(e), { title: "导出 DOCX 失败", kind: "error" });
   }
 }
 
@@ -1915,7 +1942,7 @@ recentBtn.addEventListener("click", (e) => {
   else closeRecent();
 });
 
-// ---------- 导出下拉菜单（PDF / HTML）----------
+// ---------- 导出下拉菜单（PDF / HTML / DOCX）----------
 const exportBtn = document.getElementById("btn-export") as HTMLButtonElement;
 const exportMenu = document.getElementById("export-menu") as HTMLElement;
 
@@ -1953,6 +1980,16 @@ document.getElementById("btn-pdf")!.addEventListener("click", () => {
 document.getElementById("btn-html")!.addEventListener("click", () => {
   closeExportMenu();
   void exportHtml();
+});
+const docxBtn = document.getElementById("btn-docx") as HTMLButtonElement;
+docxBtn.addEventListener("click", async () => {
+  closeExportMenu();
+  docxBtn.disabled = true;
+  try {
+    await exportDocx();
+  } finally {
+    docxBtn.disabled = false;
+  }
 });
 document.getElementById("btn-search")!.addEventListener("click", () => openSearch());
 document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);

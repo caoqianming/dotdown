@@ -306,16 +306,19 @@ interface PersistedTab {
 - **刷新时机**：编辑器 `updateListener` 在 `docChanged || selectionSet` 时调 `updateWordCount()`
   （故选区变化也即时更新已选字数）；切标签经 `activate()` 也刷新。打印时状态栏隐藏。
 
-### 4.17 导出（PDF / HTML 下拉菜单，v0.3.0）
+### 4.17 导出（PDF / HTML / Word）
 
-工具栏「导出 ▾」下拉收纳两项导出，复用「最近」下拉的定位/样式（`.recent-wrap` + `.recent-menu`，
+工具栏「导出 ▾」下拉收纳三项导出，复用「最近」下拉的定位/样式（`.recent-wrap` + `.recent-menu`，
 紧凑单行项 `.menu-item`）；点项执行后收起，点菜单外或 `Esc` 关闭。`Ctrl+P` 仍直达 PDF。
 
 - **导出 PDF**：见 §4.9（走 `window.print()`）。
 - **导出 HTML**：把当前文档渲染为**自包含 `.html`**——内联一套浅色 markdown 样式（`EXPORT_CSS`，
   不随应用主题，换台机器/浏览器打开仍美观），`write_file` 落盘，默认存到源文件同级、同名 `.html`。
+- **导出 Word**：在保存对话框打开前读取当前标签的内容和源路径，复用 Markdown 渲染器生成正文。
+  `docx-export.ts` 将正文转换成可编辑的 Word 元素，嵌入可读取的图片，并复用 `write_bytes` 保存。
+  本地图片以源文档目录解析，无法读取时显示替代文字。公式与 Mermaid 图表以源码保留。
 
-- **图片路径**：导出时置 `exportRender=true`（v0.3.4 由 `rawImagePaths` 更名），图片渲染规则
+- **HTML 图片路径**：导出时置 `exportRender=true`（v0.3.4 由 `rawImagePaths` 更名），图片渲染规则
   **跳过** `convertFileSrc` 重写、保留原始路径——asset:// URL 换环境打不开，而相对引用
   `assets/…` 在导出文件与源文件同级时仍可用；同时跳过 `data-line` 注入（见 §4.7）。
   （`try/finally` 确保渲染后复位标志，不污染预览。）
