@@ -16,10 +16,13 @@
 
 ## 2026-11-09
 
-### 新功能：导出 Word 文档
+### 已发布：v0.5.0（GitHub + Gitee，Word 文档导出）
 
 - 在「导出」菜单新增「导出 Word（.docx）」，支持当前 Markdown 内容及尚未保存的修改。
 - 将标题、列表、表格、链接和代码转换为可编辑内容，嵌入可读取的图片，保留公式和 Mermaid 源码。
+- 9 项前端测试和 3 项 Rust 测试通过，已构建 Windows x64 安装包及免安装版。
+- 源码及 `v0.5.0` 标签已同步。两端下载的安装包和免安装版均通过 SHA-256 校验。
+  [GitHub](https://github.com/caoqianming/dotdown/releases/tag/v0.5.0) · [Gitee](https://gitee.com/caoqianming/dotdown/releases/tag/v0.5.0)
 
 ## 2026-11-05
 
