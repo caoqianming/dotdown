@@ -1,10 +1,10 @@
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { Channel, invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { open, save, message, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
@@ -27,7 +27,7 @@ import MarkdownIt from "markdown-it";
 import taskLists from "markdown-it-task-lists";
 import katexPlugin from "@vscode/markdown-it-katex";
 import mathDelimiters from "./math-delimiters";
-import { setupRepository } from "./repository";
+import { fileMark, setupRepository } from "./repository";
 import hljs from "highlight.js";
 import mermaid from "mermaid";
 import "katex/dist/katex.min.css";
@@ -510,7 +510,14 @@ function renderTabs() {
     const el = document.createElement("div");
     el.className = "tab" + (t.id === activeId ? " active" : "");
     el.title = t.path ?? "未命名";
+    el.tabIndex = 0;
     el.addEventListener("click", () => switchTo(t.id));
+    el.addEventListener("keydown", (event) => {
+      if (event.target === el && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        switchTo(t.id);
+      }
+    });
 
     // 拖拽重排标签
     el.draggable = true;
@@ -538,6 +545,12 @@ function renderTabs() {
 
     el.addEventListener("contextmenu", (e) => showTabMenu(e, t.id));
 
+    const [symbol, tone] = fileMark(nameOf(t));
+    const icon = document.createElement("span");
+    icon.className = `file-mark mark-${tone}`;
+    icon.textContent = t.path ? symbol : "M↓";
+    icon.setAttribute("aria-hidden", "true");
+    el.appendChild(icon);
     const name = document.createElement("span");
     name.className = "tab-name";
     name.textContent = (isDirty(t) ? "● " : "") + nameOf(t);
@@ -609,7 +622,8 @@ function updateTitle() {
   const dirty = t ? isDirty(t) : false;
   const dot = dirty ? "● " : "";
   const label = t ? (t.path ?? "未命名") : "未命名";
-  titleEl.textContent = dot + label;
+  titleEl.textContent = `Dotdown  /  ${dot}${t ? nameOf(t) : "未命名"}`;
+  titleEl.title = label;
   void getCurrentWindow()
     .setTitle(`${dot}${t ? nameOf(t) : "Dotdown"} — Dotdown`)
     .catch(() => {});
@@ -625,6 +639,7 @@ function createTab(path: string | null, content: string, lastSaved: string): Tab
 
 /** 激活指定标签：换入其 state 并刷新界面。 */
 function activate(id: number) {
+  workspace.showDocument();
   activeId = id;
   const t = activeTab();
   if (t) {
@@ -635,6 +650,11 @@ function activate(id: number) {
   }
   const source = isSource(t?.path);
   appEl.classList.toggle("source-reading", source);
+  const breadcrumb = document.getElementById("source-breadcrumb")!;
+  breadcrumb.hidden = !source;
+  breadcrumb.textContent = source ? `${t!.path!.split(/[\\/]/).filter(Boolean).slice(-4).join("  ›  ")}  ·  只读` : "";
+  breadcrumb.title = t?.path ?? "";
+  workspace.selectFile(t?.path ?? null);
   for (const id of ["btn-save", "btn-saveas", "btn-export", "mode-editor", "mode-split", "mode-preview", "btn-outline"]) {
     (document.getElementById(id) as HTMLButtonElement).disabled = source;
   }
@@ -655,7 +675,10 @@ function newTab(path: string | null = null, content = ""): Tab {
 }
 
 function switchTo(id: number) {
-  if (id === activeId) return;
+  if (id === activeId) {
+    if (workspace.showDocument()) editor.focus();
+    return;
+  }
   syncActive();
   activate(id);
   saveSession();
@@ -1101,6 +1124,7 @@ function updateReplaceAvailability() {
 }
 
 function openSearch(withReplace = false) {
+  if (appEl.classList.contains("diff-reading")) return;
   searchBar.hidden = false;
   updateReplaceAvailability();
   if (withReplace && searchTarget() === "editor" && !isSource(activeTab()?.path)) setReplaceOpen(true);
@@ -1512,83 +1536,67 @@ function bindSettings() {
   });
 }
 
-// ---------- 检查更新（轻量方案：只查版本 + 跳转下载页，不在应用内下载）----------
-// 仓库坐标。国内用户优先 Gitee，失败回退 GitHub。
-const REPO = "caoqianming/dotdown";
-const GITEE_RELEASES = `https://gitee.com/${REPO}/releases`;
-const GITHUB_RELEASES = `https://github.com/${REPO}/releases`;
+// ---------- 检查并下载更新 ----------
+type UpdateProgress = { version: string; source: string; received: number; total: number | null };
+type UpdateOutcome =
+  | { status: "current" }
+  | { status: "downloaded"; version: string; path: string }
+  | { status: "unavailable"; version: string };
 
-// 语义化版本比较：a > b 返回正数。仅比较数字段，忽略前缀 v 与预发布标记。
-function compareVersion(a: string, b: string): number {
-  const norm = (s: string) =>
-    s
-      .replace(/^v/i, "")
-      .split(/[.\-+]/)
-      .map((x) => parseInt(x, 10))
-      .filter((n) => !Number.isNaN(n));
-  const pa = norm(a);
-  const pb = norm(b);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
-}
-
-// 取最新发行版：优先 Gitee，失败回退 GitHub。返回 tag、下载页与（可选）更新说明。
-async function fetchLatest(): Promise<{ tag: string; page: string; body: string } | null> {
-  // Gitee：国内访问快，作为首选
-  try {
-    const r = await fetch(`https://gitee.com/api/v5/repos/${REPO}/releases/latest`);
-    if (r.ok) {
-      const j = await r.json();
-      if (j?.tag_name) return { tag: j.tag_name, page: GITEE_RELEASES, body: j.body || "" };
-    }
-  } catch {
-    /* 回退 GitHub */
-  }
-  // GitHub 回退
-  try {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
-    if (r.ok) {
-      const j = await r.json();
-      if (j?.tag_name)
-        return { tag: j.tag_name, page: j.html_url || GITHUB_RELEASES, body: j.body || "" };
-    }
-  } catch {
-    /* 两端均失败 */
-  }
-  return null;
-}
-
-const updateStatus = document.getElementById("update-status") as HTMLElement;
+const updateStatus = document.getElementById("update-status")!;
+const statusUpdate = document.getElementById("status-update") as HTMLButtonElement;
 const btnCheckUpdate = document.getElementById("btn-check-update") as HTMLButtonElement;
+const revealUpdate = document.getElementById("update-reveal") as HTMLButtonElement;
+let updatePath = "";
 
-// silent=true：仅在有新版时提示，无新版/出错都不打扰（用于启动时静默检查）。
-async function checkUpdate(silent = false) {
-  if (!silent) {
-    btnCheckUpdate.disabled = true;
-    updateStatus.textContent = "检查中…";
-  }
-  const latest = await fetchLatest();
-  if (!latest) {
-    if (!silent) updateStatus.textContent = "检查失败，请稍后重试";
-    btnCheckUpdate.disabled = false;
-    return;
-  }
-  const current = await getVersion();
-  if (compareVersion(latest.tag, current) > 0) {
-    // 有新版：在关于弹窗内提示，并提供“去下载”链接
-    updateStatus.innerHTML = `发现新版本 ${latest.tag} · <a id="update-download">去下载</a>`;
-    document.getElementById("update-download")!.addEventListener("click", () => {
-      void openUrl(latest.page);
-    });
-    if (silent && aboutOverlay.hidden) openAbout();
-  } else if (!silent) {
-    updateStatus.textContent = "已是最新版本";
-  }
-  btnCheckUpdate.disabled = false;
+function setUpdateStatus(message: string, showInFooter = false) {
+  updateStatus.textContent = message;
+  statusUpdate.hidden = !showInFooter;
+  statusUpdate.textContent = message;
 }
+
+async function checkUpdate(silent = false) {
+  if (btnCheckUpdate.disabled) return;
+  btnCheckUpdate.disabled = true;
+  revealUpdate.hidden = true;
+  updatePath = "";
+  let foundUpdate = false;
+  setUpdateStatus("正在检查更新…");
+  const onProgress = new Channel<UpdateProgress>(({ version, source, received, total }) => {
+    if (!btnCheckUpdate.disabled) return;
+    foundUpdate = true;
+    const amount = total ? Math.floor(100 * received / total) + "%" : (received / 1048576).toFixed(1) + " MiB";
+    setUpdateStatus(`正在从 ${source} 下载 ${version} · ${amount}`, true);
+  });
+  try {
+    const result = await invoke<UpdateOutcome>("download_update", { onProgress });
+    if (result.status === "downloaded") {
+      updatePath = result.path;
+      revealUpdate.hidden = false;
+      setUpdateStatus(`${result.version} 已下载`, true);
+    } else if (result.status === "unavailable") {
+      setUpdateStatus(`发现 ${result.version}，但没有适合此设备的安装包`, true);
+    } else {
+      setUpdateStatus("已是最新版本");
+    }
+  } catch (error) {
+    setUpdateStatus(foundUpdate ? "下载失败，可重新检查更新" : "检查更新失败，可重试", foundUpdate);
+    if (!silent || foundUpdate) console.warn("更新失败", error);
+  } finally {
+    btnCheckUpdate.disabled = false;
+  }
+}
+
+statusUpdate.addEventListener("click", openAbout);
+revealUpdate.addEventListener("click", async () => {
+  if (!updatePath) return;
+  try {
+    await revealItemInDir(updatePath);
+  } catch (error) {
+    await message(updatePath, { title: "安装包位置" });
+    console.warn("无法显示安装包", error);
+  }
+});
 
 // ---------- 导出 PDF（走 WebView 打印，选“另存为 PDF”）----------
 let titleBeforePrint = "";
@@ -2139,9 +2147,13 @@ async function checkExternalChanges() {
   }
 }
 
+const workspace = setupRepository(loadPath, () => {
+  if (getComputedStyle(document.querySelector(".pane-editor")!).display !== "none") editor.focus();
+  else tabbarEl.querySelector<HTMLElement>(".tab.active")?.focus();
+});
+
 // ---------- 初始化 ----------
 async function init() {
-  setupRepository(loadPath);
   applyTheme();
   applyPreviewFont(); // 恢复预览字号（编辑器字号/换行已在建 state 时生效）
   applySplit(readSplit()); // 恢复上次的分栏宽度比例
@@ -2181,7 +2193,7 @@ async function init() {
   } catch {
     /* ignore */
   }
-  // 启动时静默检查一次更新：仅在有新版时弹关于窗提示，失败/最新都不打扰
+  // 启动后在后台检查和下载，状态显示在底栏。
   void checkUpdate(true);
 
   // 首屏渲染完成后，让后端抖一下窗口尺寸，逼 WebView2 按当前显示器/DPI 重新铺设画面。

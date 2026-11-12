@@ -30,7 +30,6 @@
           <button id="btn-new" title="新建 (Ctrl+N)">新建</button>
           <button id="btn-open" title="打开 (Ctrl+O)">打开</button>
           <button id="btn-folder" title="打开代码库或普通文件夹">打开文件夹</button>
-          <button id="btn-repository" title="显示或隐藏文件与 Git 侧栏" aria-expanded="false">仓库</button>
           <div class="recent-wrap">
             <button id="btn-recent" title="最近打开">最近 ▾</button>
             <div id="recent-menu" class="recent-menu" hidden></div>
@@ -65,7 +64,49 @@
           </button>
         </div>
       </header>
-      <nav id="tabbar" class="tabbar"></nav>
+      <div class="workbench">
+        <nav class="activity-bar" aria-label="工作区视图">
+          <button id="btn-repository" title="资源管理器" aria-label="资源管理器" aria-controls="repository" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3h8l4 4v12H8z M16 3v5h4 M5 7H4v15h13v-1"/></svg>
+          </button>
+          <button id="btn-source-control" title="源代码管理" aria-label="源代码管理" aria-controls="repository" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="6" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M6 7.5v9m12-9c0 6-12 2-12 8"/></svg>
+            <span id="git-badge" class="activity-badge" hidden></span>
+          </button>
+        </nav>
+        <aside id="repository" class="repository" aria-labelledby="repository-view-title" hidden>
+          <div class="repository-heading">
+            <strong id="repository-view-title">资源管理器</strong>
+            <button id="repository-open" title="打开文件夹" aria-label="打开文件夹">＋</button>
+            <button id="repository-refresh" title="刷新文件和 Git" aria-label="刷新文件和 Git" disabled>↻</button>
+          </div>
+          <div id="repository-empty" class="repository-empty">
+            <p>打开本地文件夹，浏览代码和 Git 变更。</p>
+            <button id="repository-open-empty">打开文件夹</button>
+          </div>
+          <div id="repository-explorer" class="repository-view" hidden>
+            <div id="repository-title" class="repository-section"></div>
+            <div class="repository-filter"><input id="repository-filter" aria-label="筛选已展开的文件树" placeholder="筛选已展开的文件树…" type="search" /></div>
+            <div id="repository-files" class="repository-scroll" aria-label="工作区文件"></div>
+          </div>
+          <div id="repository-scm" class="repository-view repository-scroll" hidden>
+            <p id="repository-info" class="repository-note" role="status"></p>
+            <div id="repository-changes"></div>
+            <details open><summary class="repository-section">最近 30 条提交</summary><ol id="repository-history"></ol></details>
+          </div>
+        </aside>
+        <div class="workbench-editor">
+          <div class="editor-tabs">
+            <nav id="tabbar" class="tabbar" aria-label="打开的文档"></nav>
+            <div id="git-tab" class="tab git-tab" hidden>
+              <button id="git-tab-open" class="git-tab-open"></button>
+              <button id="git-close" class="tab-close" title="关闭差异" aria-label="关闭差异">×</button>
+            </div>
+          </div>
+          <section id="git-editor" class="git-editor" aria-labelledby="git-title" hidden>
+            <div id="git-title" class="git-title"></div>
+            <div id="git-content" class="git-content" tabindex="0"></div>
+          </section>
       <main class="panes">
         <div id="search-bar" class="search-bar" hidden>
           <button id="search-toggle-replace" class="search-toggle" title="切换替换 (Ctrl+H)">▸</button>
@@ -84,30 +125,21 @@
             </div>
           </div>
         </div>
-        <aside id="repository" class="repository" aria-label="代码库" hidden>
-          <div class="repository-heading"><strong>文件与 Git</strong><button id="repository-refresh" title="刷新文件和 Git">刷新</button></div>
-          <div id="repository-title" class="repository-path">尚未打开文件夹</div>
-          <input id="repository-filter" aria-label="筛选当前目录" placeholder="筛选当前目录…" type="search" />
-          <div id="repository-files" class="repository-files"></div>
-          <details open><summary>Git 变更</summary><p id="repository-info" role="status"></p><div id="repository-changes"></div></details>
-          <details><summary>最近 30 条提交</summary><pre id="repository-history"></pre></details>
-        </aside>
         <aside id="outline" class="outline"></aside>
-        <section class="pane pane-editor"><div id="editor"></div></section>
+        <section class="pane pane-editor"><div id="source-breadcrumb" class="source-breadcrumb" hidden></div><div id="editor"></div></section>
         <div class="divider"></div>
         <section class="pane pane-preview">
           <article id="preview" class="markdown-body"></article>
         </section>
       </main>
+        </div>
+      </div>
       <footer class="statusbar">
+        <button id="status-git" class="status-git" title="打开源代码管理" hidden></button>
+        <button id="status-update" class="status-update" title="查看更新进度" hidden></button>
         <span id="status-words" class="status-words"></span>
       </footer>
     </div>
-
-    <dialog id="git-dialog" aria-labelledby="git-title">
-      <div class="repository-heading"><strong id="git-title"></strong><button id="git-close">关闭</button></div>
-      <pre id="git-content" tabindex="0"></pre>
-    </dialog>
 
     <!-- 关于 / 帮助 弹窗 -->
     <div id="about-overlay" class="modal-overlay" hidden>
@@ -127,7 +159,8 @@
             <p class="modal-sub">一个用 Tauri 打造的 Markdown 预览 / 编辑小工具</p>
             <div class="about-update">
               <button id="btn-check-update" class="btn-update">检查更新</button>
-              <span id="update-status" class="update-status"></span>
+              <span id="update-status" class="update-status" role="status"></span>
+              <button id="update-reveal" class="btn-update" hidden>在文件夹中显示</button>
             </div>
           </div>
         </div>

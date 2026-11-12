@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
 mod repository;
+mod updates;
 
 /// 读取磁盘上的文本文件，返回内容。
 #[tauri::command]
@@ -121,6 +122,8 @@ pub fn run() {
             repository::repository_entries,
             repository::repository_git,
             repository::repository_diff,
+            repository::repository_read,
+            updates::download_update,
             fix_webview_paint
         ])
         .run(tauri::generate_context!())

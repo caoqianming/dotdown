@@ -26,9 +26,9 @@ fn within(root: &str, path: &str) -> Result<PathBuf, String> {
 #[tauri::command]
 pub async fn repository_entries(root: String, path: String) -> Result<Vec<Entry>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let path = within(&root, &path)?;
+        let directory = within(&root, &path)?;
         let mut entries = Vec::new();
-        for entry in fs::read_dir(path).map_err(|e| e.to_string())? {
+        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
             let kind = entry.file_type().map_err(|e| e.to_string())?;
             // 不遍历链接和 Git 内部数据库；避免循环或跳出工作区。
@@ -43,7 +43,10 @@ pub async fn repository_entries(root: String, path: String) -> Result<Vec<Entry>
             }
             entries.push(Entry {
                 name: entry.file_name().to_string_lossy().into_owned(),
-                path: entry.path().to_string_lossy().into_owned(),
+                path: Path::new(&path)
+                    .join(entry.file_name())
+                    .to_string_lossy()
+                    .into_owned(),
                 directory: kind.is_dir(),
             });
         }
@@ -143,13 +146,21 @@ fn git(root: &str, args: &[&str]) -> Result<String, String> {
 pub struct Change {
     status: String,
     path: String,
+    previous_path: Option<String>,
+}
+#[derive(Serialize)]
+pub struct Commit {
+    hash: String,
+    date: String,
+    author: String,
+    subject: String,
 }
 #[derive(Serialize)]
 pub struct Repository {
     root: String,
     branch: String,
     changes: Vec<Change>,
-    history: String,
+    history: Vec<Commit>,
 }
 
 fn parse_changes(output: &str) -> Vec<Change> {
@@ -160,13 +171,16 @@ fn parse_changes(output: &str) -> Vec<Change> {
             continue;
         }
         let status = &item[..2];
+        let previous_path = if status.contains('R') || status.contains('C') {
+            parts.next().map(str::to_owned)
+        } else {
+            None
+        };
         changes.push(Change {
             status: status.to_owned(),
             path: item[3..].to_owned(),
+            previous_path,
         });
-        if status.contains('R') || status.contains('C') {
-            parts.next();
-        }
     }
     changes
 }
@@ -184,12 +198,19 @@ pub async fn repository_git(root: String) -> Result<Repository, String> {
         let branch = git(&actual, &["rev-parse", "--abbrev-ref", "HEAD"])
             .or_else(|_| git(&actual, &["symbolic-ref", "--short", "HEAD"]))?;
         let history = if git(&actual, &["rev-parse", "--verify", "HEAD"]).is_ok() {
-            git(
+            let log = git(
                 &actual,
-                &["log", "-30", "--date=short", "--format=%h  %ad  %an%n%s%n"],
-            )?
+                &[
+                    "log",
+                    "-30",
+                    "-z",
+                    "--date=short",
+                    "--format=%h%x00%ad%x00%an%x00%s",
+                ],
+            )?;
+            parse_history(&log)
         } else {
-            "尚无提交".into()
+            Vec::new()
         };
         Ok(Repository {
             root: actual,
@@ -202,27 +223,70 @@ pub async fn repository_git(root: String) -> Result<Repository, String> {
     .map_err(|e| e.to_string())?
 }
 
+fn parse_history(log: &str) -> Vec<Commit> {
+    log.split_terminator('\0')
+        .collect::<Vec<_>>()
+        .chunks_exact(4)
+        .map(|fields| Commit {
+            hash: fields[0].into(),
+            date: fields[1].into(),
+            author: fields[2].into(),
+            subject: fields[3].into(),
+        })
+        .collect()
+}
+
 #[tauri::command]
-pub async fn repository_diff(root: String, path: String, staged: bool) -> Result<String, String> {
+pub async fn repository_read(root: String, path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_relative_path(&path)?;
+        let file = within(&root, &Path::new(&root).join(path).to_string_lossy())?;
+        if !file.is_file() {
+            return Err("这不是可阅读的普通文件".into());
+        }
+        read_text(&file)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn validate_relative_path(path: &str) -> Result<(), String> {
+    if path.is_empty()
+        || Path::new(path).is_absolute()
+        || Path::new(path)
+            .components()
+            .any(|p| !matches!(p, Component::Normal(_)))
+    {
+        return Err("无效的仓库相对路径".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn repository_diff(
+    root: String,
+    path: String,
+    staged: bool,
+    previous_path: Option<String>,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         // 删除的文件也应能查看 diff，因此只校验相对路径，不 canonicalize 文件。
-        if Path::new(&path).is_absolute()
-            || Path::new(&path)
-                .components()
-                .any(|p| !matches!(p, Component::Normal(_)))
-        {
-            return Err("无效的仓库相对路径".into());
-        }
+        validate_relative_path(&path)?;
         let mut args = vec![
             "--literal-pathspecs",
             "diff",
             "--no-ext-diff",
             "--no-textconv",
+            "--find-renames",
         ];
         if staged {
             args.push("--cached");
         }
         args.extend(["--", &path]);
+        if let Some(previous) = &previous_path {
+            validate_relative_path(previous)?;
+            args.push(previous);
+        }
         git(&root, &args)
     })
     .await
@@ -238,6 +302,7 @@ mod tests {
         let changes = parse_changes("R  新 名.ts\0旧.ts\0 M src/a.rs\0?? :(glob)*.ts\0");
         assert_eq!(changes.len(), 3);
         assert_eq!(changes[0].path, "新 名.ts");
+        assert_eq!(changes[0].previous_path.as_deref(), Some("旧.ts"));
         assert_eq!(changes[1].status, " M");
         assert_eq!(changes[2].path, ":(glob)*.ts");
     }
@@ -300,6 +365,21 @@ mod tests {
             ],
         )
         .unwrap();
+        let log = git(
+            directory,
+            &[
+                "log",
+                "-30",
+                "-z",
+                "--date=short",
+                "--format=%h%x00%ad%x00%an%x00%s",
+            ],
+        )
+        .unwrap();
+        let history = parse_history(&log);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].author, "Dotdown Test");
+        assert_eq!(history[0].subject, "fixture");
         fs::write(&file, "staged\n").unwrap();
         git(directory, &["add", "--", "新 名.ts"]).unwrap();
         fs::write(&file, "working\n").unwrap();

@@ -212,26 +212,11 @@ interface PersistedTab {
   转发到现有窗口 + 聚焦。前端在启动时调 `initial_file`、并 `listen("open-file")`，
   统一交给 `loadPath`（按路径去重）。
 
-### 4.11 更新检查（轻量方案，已实现 v0.2.2）
+### 4.11 更新检查与自动下载
 
-应用内「检查更新」：只**检查 + 跳转下载页**，不在应用内下载安装（后者是完整自动更新方案，
-需签名密钥与长期维护，暂不采用），因此零密钥、零额外发布产物。
-
-- **取版本**：当前版本用 `getVersion()`；远端"最新版"用发布平台 API 的 `tag_name`。
-  - 仓库坐标常量 `REPO = "caoqianming/dotdown"`。
-  - **优先 Gitee**：`GET https://gitee.com/api/v5/repos/caoqianming/dotdown/releases/latest`
-    （国内访问快）；失败回退 GitHub：`GET https://api.github.com/repos/.../releases/latest`。
-  - 请求方式：webview `fetch` 直接请求；CSP 当前为 null 放行。
-- **比较**：`compareVersion()` 按语义化版本逐段比较 `tag`（去前缀 `v`、忽略预发布标记）。
-- **下载**：有新版时在关于弹窗内显示 `发现新版本 vX · 去下载`，「去下载」用 `openUrl()`
-  （`tauri-plugin-opener`）打开对应**发行版页面**（Gitee 命中则开 Gitee，回退 GitHub）。
-- **入口**：关于弹窗内「检查更新」按钮（`checkUpdate(false)`，会反馈「检查中／已是最新／失败」）；
-  启动时静默检查一次 `checkUpdate(true)`——仅在有新版时自动弹出关于窗提示，最新/失败不打扰。
-- **依赖/权限**：`@tauri-apps/plugin-opener` 的 `openUrl`；`opener:default` 含 `allow-default-urls`
-  放行 `https://*`，无需改 capabilities；网络走 webview `fetch`，无需额外插件。
-
-> 升级到「完整自动更新」时再引入 `tauri-plugin-updater` + 签名密钥 + `latest.json` 端点
-> （端点可列 Gitee 优先、GitHub 备用）。
+- 启动后以及点击「关于」里的「检查更新」时，前端调用 Rust 的 `download_update`。后端并行查询 Gitee 与 GitHub 的最新发行版，按语义化版本选取最新正式版。同版本优先 Gitee，下载失败时尝试 GitHub。
+- 只选取与设备架构匹配的 Windows NSIS 安装包。后端流式写入应用缓存中的临时文件，校验文件大小和可用的 SHA-256 摘要，通过后才保存为安装包。同版本在两端使用同一安装包，GitHub 提供的摘要可用于校验 Gitee 下载。
+- Tauri IPC 通道将进度送到底栏和关于弹窗。下载完成后可在文件夹中定位安装包，由用户运行安装程序。
 
 ### 4.12 查找（编辑器 + 预览统一搜索条）
 
@@ -423,10 +408,10 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 
 ### 4.24 代码库与 Git 阅读
 
-- `src/repository.ts` 管理文件夹侧栏：按目录懒加载、返回上级、筛选当前目录；文件复用现有标签、最近打开和会话恢复。
+- `src/repository.ts` 管理活动栏和资源管理器。目录树按展开状态懒加载，可筛选已展开的文件。文件复用现有标签、最近打开和会话恢复。
 - `src-tauri/src/repository.rs` 提供目录、Git 状态和差异命令；目录路径 canonicalize 后校验边界，跳过符号链接和 `.git`。
 - Markdown / TXT 保留编辑预览；其他文本通过 CodeMirror 只读状态显示，按文件名 / 扩展名加载语言包，禁用保存、替换、导出及图片插入。
-- Git 通过系统 `git` 查询分支、porcelain v1 NUL 分隔状态及最近 30 条提交；差异分工作区和暂存区，未跟踪文件显示内容。
+- Git 通过系统 `git` 查询分支、porcelain v1 NUL 分隔状态及最近 30 条提交；源代码管理分别显示工作区和暂存区变更，点击变更在主编辑区打开带行号的差异标签，未跟踪文件显示带行号的原文。
 - 子进程不经 shell，使用 literal pathspec，禁用外部 diff、textconv、fsmonitor 和可选索引写入；查询超时 10 秒、输出上限 2 MiB。
 - 文本文件限制为 UTF-8、2 MiB，拒绝含 NUL 的二进制内容；文件名和差异使用 `textContent` 展示，异步结果通过序号丢弃过期响应。
 
@@ -461,7 +446,7 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 > 字数统计、最近打开、图片、标签拖拽重排、数学公式 + 流程图、统一设置面板、
 > 双向滚动同步（行映射）。
 
-- [x] 更新检查（轻量方案，见 §4.11）
+- [x] 后台检查并自动下载安装包（见 §4.11）
 - [x] Gitee 镜像（国内用户下载提速，发行版优先 Gitee）
 - [x] 查找（编辑器 + 预览统一搜索条，见 §4.12）
 - [x] 图片：本地显示 + 粘贴/拖入落盘（见 §4.13）
