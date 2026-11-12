@@ -16,6 +16,14 @@
 
 ## 2026-11-12
 
+### 已发布：v0.7.0（GitHub + Gitee，多项目工作区与 Git 历史）
+
+- 同一工作区可添加多个文件夹，目录树可分别展开，重启后恢复项目列表和当前项目。
+- 源代码管理支持切换项目。提交历史滚动分页，打开提交可查看变更文件、差异和历史原文。
+- 9 项前端测试、6 项 Rust 测试及多项目与 Git 历史的浏览器验证通过，已构建 Windows x64 安装包与免安装版。
+- 源码及 `v0.7.0` 标签已同步，两端均将此版本列为最新版，公开下载的附件通过 SHA-256 校验。
+  [GitHub](https://github.com/caoqianming/dotdown/releases/tag/v0.7.0) · [Gitee](https://gitee.com/caoqianming/dotdown/releases/tag/v0.7.0)
+
 ### 已发布：v0.6.0（GitHub + Gitee，代码工作区与自动下载）
 
 - 左侧活动栏切换资源管理器和 Git，目录树可展开与筛选，源码标签显示路径、行号与高亮。
