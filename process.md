@@ -14,6 +14,17 @@
 
 ---
 
+## 2026-11-12
+
+### 已发布：v0.6.0（GitHub + Gitee，代码工作区与自动下载）
+
+- 左侧活动栏切换资源管理器和 Git，目录树可展开与筛选，源码标签显示路径、行号与高亮。
+- Git 按暂存区与工作区分组，当前分支显示在底栏，差异在主编辑区按行展示。
+- 启动后检查并下载后续 Windows 更新，可从底栏查看进度，下载完成后定位安装包并手动安装。
+- 9 项前端测试、5 项 Rust 测试和工作区浏览器验证通过，已构建 Windows x64 安装包及免安装版。
+- 源码及 `v0.6.0` 标签已同步，两端均将此版本列为最新版，公开下载的两份附件均通过 SHA-256 校验。
+  [GitHub](https://github.com/caoqianming/dotdown/releases/tag/v0.6.0) · [Gitee](https://gitee.com/caoqianming/dotdown/releases/tag/v0.6.0)
+
 ## 2026-11-09
 
 ### 已发布：v0.5.0（GitHub + Gitee，Word 文档导出）
