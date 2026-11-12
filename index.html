@@ -29,7 +29,7 @@
         <div class="group">
           <button id="btn-new" title="新建 (Ctrl+N)">新建</button>
           <button id="btn-open" title="打开 (Ctrl+O)">打开</button>
-          <button id="btn-folder" title="打开代码库或普通文件夹">打开文件夹</button>
+          <button id="btn-folder" title="将文件夹加入工作区">添加文件夹</button>
           <div class="recent-wrap">
             <button id="btn-recent" title="最近打开">最近 ▾</button>
             <div id="recent-menu" class="recent-menu" hidden></div>
@@ -77,22 +77,29 @@
         <aside id="repository" class="repository" aria-labelledby="repository-view-title" hidden>
           <div class="repository-heading">
             <strong id="repository-view-title">资源管理器</strong>
-            <button id="repository-open" title="打开文件夹" aria-label="打开文件夹">＋</button>
-            <button id="repository-refresh" title="刷新文件和 Git" aria-label="刷新文件和 Git" disabled>↻</button>
+            <button id="repository-open" title="添加文件夹" aria-label="添加文件夹">＋</button>
+            <button id="repository-refresh" title="刷新当前项目的文件和 Git" aria-label="刷新当前项目的文件和 Git" disabled>↻</button>
           </div>
           <div id="repository-empty" class="repository-empty">
-            <p>打开本地文件夹，浏览代码和 Git 变更。</p>
-            <button id="repository-open-empty">打开文件夹</button>
+            <p>添加本地文件夹，浏览代码和 Git 变更。</p>
+            <button id="repository-open-empty">添加文件夹</button>
           </div>
           <div id="repository-explorer" class="repository-view" hidden>
-            <div id="repository-title" class="repository-section"></div>
             <div class="repository-filter"><input id="repository-filter" aria-label="筛选已展开的文件树" placeholder="筛选已展开的文件树…" type="search" /></div>
-            <div id="repository-files" class="repository-scroll" aria-label="工作区文件"></div>
+            <div id="repository-files" class="repository-scroll" aria-label="工作区项目与文件"></div>
           </div>
           <div id="repository-scm" class="repository-view repository-scroll" hidden>
+            <label class="repository-project-picker" for="repository-project">项目
+              <select id="repository-project"></select>
+            </label>
             <p id="repository-info" class="repository-note" role="status"></p>
             <div id="repository-changes"></div>
-            <details open><summary class="repository-section">最近 30 条提交</summary><ol id="repository-history"></ol></details>
+            <details id="repository-history-group" open>
+              <summary class="repository-section">提交历史</summary>
+              <ol id="repository-history"></ol>
+              <p id="repository-history-status" class="repository-note" role="status" hidden></p>
+              <button id="repository-history-more" class="repository-row history-more" hidden>加载更早的提交</button>
+            </details>
           </div>
         </aside>
         <div class="workbench-editor">
@@ -105,6 +112,7 @@
           </div>
           <section id="git-editor" class="git-editor" aria-labelledby="git-title" hidden>
             <div id="git-title" class="git-title"></div>
+            <div id="git-commit-actions" class="git-commit-actions" hidden></div>
             <div id="git-content" class="git-content" tabindex="0"></div>
           </section>
       <main class="panes">

@@ -70,6 +70,10 @@ pub fn read_text(path: &Path) -> Result<String, String> {
     if bytes.len() as u64 > MAX_TEXT {
         return Err("文件超过 2 MiB，暂不支持阅读".into());
     }
+    decode_text(bytes)
+}
+
+fn decode_text(bytes: Vec<u8>) -> Result<String, String> {
     if bytes.contains(&0) {
         return Err("这是二进制文件，无法作为文本阅读".into());
     }
@@ -78,6 +82,10 @@ pub fn read_text(path: &Path) -> Result<String, String> {
 
 // 固定 Git 子命令，不经 shell；禁用外部 diff / textconv 和可选索引写入。
 fn git(root: &str, args: &[&str]) -> Result<String, String> {
+    git_bytes(root, args).map(|output| String::from_utf8_lossy(&output).into_owned())
+}
+
+fn git_bytes(root: &str, args: &[&str]) -> Result<Vec<u8>, String> {
     let mut command = Command::new("git");
     command
         .args([
@@ -139,7 +147,7 @@ fn git(root: &str, args: &[&str]) -> Result<String, String> {
     if output.len() as u64 > MAX_TEXT {
         return Err("Git 输出超过 2 MiB，请使用其他工具查看".into());
     }
-    Ok(String::from_utf8_lossy(&output).into_owned())
+    Ok(output)
 }
 
 #[derive(Serialize)]
@@ -160,7 +168,13 @@ pub struct Repository {
     root: String,
     branch: String,
     changes: Vec<Change>,
-    history: Vec<Commit>,
+    head: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct HistoryPage {
+    commits: Vec<Commit>,
+    has_more: bool,
 }
 
 fn parse_changes(output: &str) -> Vec<Change> {
@@ -197,26 +211,14 @@ pub async fn repository_git(root: String) -> Result<Repository, String> {
         )?;
         let branch = git(&actual, &["rev-parse", "--abbrev-ref", "HEAD"])
             .or_else(|_| git(&actual, &["symbolic-ref", "--short", "HEAD"]))?;
-        let history = if git(&actual, &["rev-parse", "--verify", "HEAD"]).is_ok() {
-            let log = git(
-                &actual,
-                &[
-                    "log",
-                    "-30",
-                    "-z",
-                    "--date=short",
-                    "--format=%h%x00%ad%x00%an%x00%s",
-                ],
-            )?;
-            parse_history(&log)
-        } else {
-            Vec::new()
-        };
+        let head = git(&actual, &["rev-parse", "--verify", "HEAD"])
+            .ok()
+            .map(|hash| hash.trim().into());
         Ok(Repository {
             root: actual,
             branch: branch.trim().into(),
             changes: parse_changes(&status),
-            history,
+            head,
         })
     })
     .await
@@ -234,6 +236,167 @@ fn parse_history(log: &str) -> Vec<Commit> {
             subject: fields[3].into(),
         })
         .collect()
+}
+
+fn validate_hash(hash: &str) -> Result<(), String> {
+    if !matches!(hash.len(), 40 | 64) || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("无效的 Git 提交标识".into());
+    }
+    Ok(())
+}
+
+fn history_page(
+    root: &str,
+    head: &str,
+    offset: u32,
+    page_size: usize,
+) -> Result<HistoryPage, String> {
+    validate_hash(head)?;
+    // 固定首次读取的 HEAD，分页期间新增提交不会移动页边界。
+    let skip = format!("--skip={offset}");
+    let limit = format!("--max-count={}", page_size + 1);
+    let log = git(
+        root,
+        &[
+            "log",
+            &skip,
+            &limit,
+            "-z",
+            "--date=short",
+            "--no-show-signature",
+            "--no-notes",
+            "--format=%H%x00%ad%x00%an%x00%s",
+            head,
+            "--",
+        ],
+    )?;
+    let mut commits = parse_history(&log);
+    let has_more = commits.len() > page_size;
+    commits.truncate(page_size);
+    Ok(HistoryPage { commits, has_more })
+}
+
+#[tauri::command]
+pub async fn repository_history(
+    root: String,
+    head: String,
+    offset: u32,
+) -> Result<HistoryPage, String> {
+    tauri::async_runtime::spawn_blocking(move || history_page(&root, &head, offset, 30))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn first_parent(root: &str, hash: &str) -> Result<Option<String>, String> {
+    validate_hash(hash)?;
+    // 读取提交对象的父提交，避免把浅克隆的边界误当成仓库的初始提交。
+    let commit = git(root, &["cat-file", "commit", hash])?;
+    let parent = commit
+        .lines()
+        .take_while(|line| !line.is_empty())
+        .find_map(|line| line.strip_prefix("parent "));
+    if let Some(parent) = parent {
+        validate_hash(parent)?;
+    }
+    Ok(parent.map(str::to_owned))
+}
+
+fn commit_diff(root: &str, hash: &str, paths: &[&str]) -> Result<String, String> {
+    let parent = first_parent(root, hash)?;
+    let mut args = vec![
+        "--literal-pathspecs",
+        "diff-tree",
+        "--no-commit-id",
+        "-r",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--find-renames",
+    ];
+    if paths.is_empty() {
+        args.extend(["--name-status", "-z"]);
+    } else {
+        args.push("--patch");
+    }
+    match &parent {
+        Some(parent) => args.push(parent),
+        None => args.push("--root"),
+    }
+    args.extend([hash, "--"]);
+    args.extend_from_slice(paths);
+    git(root, &args)
+}
+
+fn parse_commit_changes(output: &str) -> Vec<Change> {
+    let mut fields = output.split_terminator('\0');
+    let mut changes = Vec::new();
+    while let Some(status) = fields.next() {
+        let Some(first_path) = fields.next() else {
+            break;
+        };
+        let (path, previous_path) = if status.starts_with(['R', 'C']) {
+            let Some(new_path) = fields.next() else { break };
+            (new_path, Some(first_path.to_owned()))
+        } else {
+            (first_path, None)
+        };
+        changes.push(Change {
+            status: status.to_owned(),
+            path: path.to_owned(),
+            previous_path,
+        });
+    }
+    changes
+}
+
+#[tauri::command]
+pub async fn repository_commit_files(root: String, hash: String) -> Result<Vec<Change>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        commit_diff(&root, &hash, &[]).map(|output| parse_commit_changes(&output))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn commit_file_text(root: &str, hash: &str, path: &str, before: bool) -> Result<String, String> {
+    validate_hash(hash)?;
+    validate_relative_path(path)?;
+    let parent;
+    let revision = if before {
+        parent = first_parent(root, hash)?.ok_or("没有可读取的父提交")?;
+        &parent
+    } else {
+        hash
+    };
+    let object = format!("{revision}:{path}");
+    let bytes = git_bytes(root, &["cat-file", "blob", &object])?;
+    decode_text(bytes)
+}
+
+#[tauri::command]
+pub async fn repository_commit_file(
+    root: String,
+    hash: String,
+    path: String,
+    previous_path: Option<String>,
+    mode: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_relative_path(&path)?;
+        match mode.as_str() {
+            "diff" => {
+                let mut paths = vec![path.as_str()];
+                if let Some(previous) = &previous_path {
+                    validate_relative_path(previous)?;
+                    paths.push(previous);
+                }
+                commit_diff(&root, &hash, &paths)
+            }
+            "content" | "before" => commit_file_text(&root, &hash, &path, mode == "before"),
+            _ => Err("无效的提交文件视图".into()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -305,6 +468,83 @@ mod tests {
         assert_eq!(changes[0].previous_path.as_deref(), Some("旧.ts"));
         assert_eq!(changes[1].status, " M");
         assert_eq!(changes[2].path, ":(glob)*.ts");
+    }
+
+    #[test]
+    fn pages_fixed_history_and_reads_committed_versions() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_str().unwrap();
+        git(root, &["init", "--initial-branch=main"]).unwrap();
+        let commit = |message: &str| {
+            git(root, &["add", "-A"]).unwrap();
+            git(
+                root,
+                &[
+                    "-c",
+                    "user.name=Dotdown Test",
+                    "-c",
+                    "user.email=test@example.invalid",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-m",
+                    message,
+                ],
+            )
+            .unwrap();
+            git(root, &["rev-parse", "HEAD"]).unwrap().trim().to_owned()
+        };
+        let original = temp.path().join("原 文件.txt");
+        let renamed = temp.path().join("新 文件.txt");
+        fs::write(&original, "original\n").unwrap();
+        let initial = commit("initial");
+        fs::rename(&original, &renamed).unwrap();
+        let rename = commit("rename");
+        fs::remove_file(&renamed).unwrap();
+        let deletion = commit("deletion");
+        fs::write(&renamed, "working tree\n").unwrap();
+        let later = commit("later");
+
+        let page = history_page(root, &deletion, 0, 2).unwrap();
+        assert_eq!(
+            page.commits
+                .iter()
+                .map(|c| c.hash.as_str())
+                .collect::<Vec<_>>(),
+            [&deletion, &rename]
+        );
+        assert!(page.has_more);
+        let page = history_page(root, &deletion, 2, 2).unwrap();
+        assert_eq!(page.commits[0].hash, initial);
+        assert!(!page.has_more);
+        assert_eq!(
+            history_page(root, &later, 0, 1).unwrap().commits[0].hash,
+            later
+        );
+        assert!(history_page(root, "--all", 0, 1).is_err());
+
+        let added = parse_commit_changes(&commit_diff(root, &initial, &[]).unwrap());
+        assert_eq!(added[0].status, "A");
+        let renamed_files = parse_commit_changes(&commit_diff(root, &rename, &[]).unwrap());
+        assert_eq!(renamed_files[0].status, "R100");
+        assert_eq!(
+            renamed_files[0].previous_path.as_deref(),
+            Some("原 文件.txt")
+        );
+        assert_eq!(renamed_files[0].path, "新 文件.txt");
+        assert!(commit_diff(root, &rename, &["新 文件.txt", "原 文件.txt"])
+            .unwrap()
+            .contains("similarity index 100%"));
+        assert_eq!(
+            commit_file_text(root, &rename, "新 文件.txt", false).unwrap(),
+            "original\n"
+        );
+        let deleted = parse_commit_changes(&commit_diff(root, &deletion, &[]).unwrap());
+        assert_eq!(deleted[0].status, "D");
+        assert_eq!(
+            commit_file_text(root, &deletion, "新 文件.txt", true).unwrap(),
+            "original\n"
+        );
     }
 
     #[test]
