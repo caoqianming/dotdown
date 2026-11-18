@@ -122,11 +122,11 @@ function ensureMermaidTheme(dark = isDark()) {
 let mermaidSeq = 0;
 
 /** 把预览中 <pre class="mermaid"> 的代码异步渲染成 SVG。 */
-async function runMermaid() {
+async function runMermaid(dark = isDark()) {
   const nodes = Array.from(previewEl.querySelectorAll<HTMLElement>("pre.mermaid:not([data-done])"));
   if (!nodes.length) return;
   const seq = ++mermaidSeq;
-  ensureMermaidTheme();
+  ensureMermaidTheme(dark);
   for (let i = 0; i < nodes.length; i++) {
     const el = nodes[i];
     const code = el.textContent ?? "";
@@ -446,7 +446,6 @@ function makeState(doc: string, path: string | null = null): EditorState {
         { key: "Mod-t", run: () => (newBlankDoc(), true) },
         { key: "Mod-w", run: () => (closeTab(activeId), true) },
         { key: "Mod-\\", run: () => (toggleOutline(), true) },
-        { key: "Mod-p", run: () => (exportPdf(), true) },
       ]),
     ],
   });
@@ -1598,8 +1597,9 @@ revealUpdate.addEventListener("click", async () => {
   }
 });
 
-// ---------- 导出 PDF（走 WebView 打印，选“另存为 PDF”）----------
+// ---------- 导出 PDF ----------
 let titleBeforePrint = "";
+let exportingPdf = false;
 
 window.addEventListener("afterprint", () => {
   if (titleBeforePrint) {
@@ -1609,23 +1609,47 @@ window.addEventListener("afterprint", () => {
 });
 
 async function exportPdf() {
-  if (isSource(activeTab()?.path)) return;
   const t = activeTab();
-  // 用文件名作为 PDF 默认文件名（去扩展名），打印结束后还原
-  titleBeforePrint = document.title;
-  document.title = t && t.path ? nameOf(t).replace(/\.[^.]+$/, "") : "Dotdown";
-  // 打印强制浅色背景，深色 Mermaid 图表先临时转浅色重渲染，打印后还原
-  const restoreDark = isDark() && !!previewEl.querySelector("pre.mermaid");
-  if (restoreDark) {
-    ensureMermaidTheme(false);
-    previewEl.innerHTML = md.render(editor.state.doc.toString());
-    lineAnchorsCache = null;
-    await runMermaid();
-  }
-  window.print();
-  if (restoreDark) {
-    ensureMermaidTheme(true);
-    renderPreview();
+  if (!t || isSource(t.path) || exportingPdf) return;
+  const name = nameOf(t);
+  const title = t.path ? name.replace(/\.[^.]+$/, "") || name : "Dotdown";
+  const directSave = /\bWindows\b/.test(navigator.userAgent);
+  const previousTitle = document.title;
+  let restorePreview = false;
+  exportingPdf = true;
+  try {
+    const path = directSave ? await save({
+      defaultPath: `${t.path ? t.path.slice(0, -name.length) : ""}${title}.pdf`,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    }) : null;
+    if (directSave && !path) return;
+
+    // 打印使用浅色背景。重绘深色图表，并等待尚在渲染的图表。
+    const diagrams = previewEl.querySelectorAll("pre.mermaid");
+    restorePreview = diagrams.length > 0 && (isDark() ||
+      Array.from(diagrams).some((diagram) => !diagram.hasAttribute("data-done")));
+    if (restorePreview) {
+      previewEl.innerHTML = md.render(editor.state.doc.toString());
+      lineAnchorsCache = null;
+      await runMermaid(false);
+    }
+    if (t !== activeTab()) throw new Error("当前文档已切换，请重新导出");
+
+    document.title = title;
+    if (path) {
+      await invoke("export_pdf", { path, title });
+    } else {
+      titleBeforePrint = previousTitle;
+      await window.print();
+    }
+  } catch (error) {
+    document.title = previousTitle;
+    titleBeforePrint = "";
+    await message(String(error), { title: "导出 PDF 失败", kind: "error" });
+  } finally {
+    if (directSave) document.title = previousTitle;
+    if (restorePreview) renderPreview();
+    exportingPdf = false;
   }
 }
 
@@ -1983,7 +2007,7 @@ document.getElementById("btn-save")!.addEventListener("click", saveFile);
 document.getElementById("btn-saveas")!.addEventListener("click", saveFileAs);
 document.getElementById("btn-pdf")!.addEventListener("click", () => {
   closeExportMenu();
-  exportPdf();
+  void exportPdf();
 });
 document.getElementById("btn-html")!.addEventListener("click", () => {
   closeExportMenu();
@@ -2059,6 +2083,10 @@ document.addEventListener("keydown", (e) => {
   } else if ((e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H")) {
     e.preventDefault();
     openSearch(true);
+  } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "p") {
+    e.preventDefault();
+    closeExportMenu();
+    void exportPdf();
   }
 });
 document

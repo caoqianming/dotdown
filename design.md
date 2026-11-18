@@ -191,11 +191,13 @@ interface PersistedTab {
 
 ### 4.9 导出 PDF
 
-走 WebView 的 `window.print()` → 系统打印「另存为 PDF」。`@media print` 只输出
-`.markdown-body`、强制浅色（用 `!important` 覆盖主题变量，保证可读），代码块以
-`print-color-adjust: exact` 保留深色高亮；并对代码块/表格/图片 `break-inside: avoid`
-避免跨页截断。打印前把 `document.title` 临时设为文件名（PDF 默认文件名），`afterprint`
-还原。
+Windows 上先选择保存路径，再通过 WebView2 的 `PrintToPdf` 按 A4 版式生成 PDF。清空
+`FooterUri` 以隐藏内部地址，保留日期、文档标题和页码。生成成功后再替换目标文件。
+其他平台通过 `window.print()` 打开打印面板。
+
+`@media print` 只输出 `.markdown-body` 并强制浅色。代码块以
+`print-color-adjust: exact` 保留深色高亮，代码块、表格、图片等使用
+`break-inside: avoid` 尽量避免跨页截断。打印时临时使用文档名作为标题。
 
 ### 4.10 文件关联 / 双击打开
 
@@ -296,7 +298,7 @@ interface PersistedTab {
 工具栏「导出 ▾」下拉收纳三项导出，复用「最近」下拉的定位/样式（`.recent-wrap` + `.recent-menu`，
 紧凑单行项 `.menu-item`）；点项执行后收起，点菜单外或 `Esc` 关闭。`Ctrl+P` 仍直达 PDF。
 
-- **导出 PDF**：见 §4.9（走 `window.print()`）。
+- **导出 PDF**：见 §4.9。
 - **导出 HTML**：把当前文档渲染为**自包含 `.html`**——内联一套浅色 markdown 样式（`EXPORT_CSS`，
   不随应用主题，换台机器/浏览器打开仍美观），`write_file` 落盘，默认存到源文件同级、同名 `.html`。
 - **导出 Word**：在保存对话框打开前读取当前标签的内容和源路径，复用 Markdown 渲染器生成正文。
@@ -369,8 +371,8 @@ KaTeX 在 `md.render` 阶段**同步**渲染为 HTML（spans + MathML），无�
 **无需 JS** 即可离线查看；含数学公式时在 `<head>` 加 KaTeX **CDN** 样式 `<link>`（字体多、内联会
 撑大文件，故用 CDN——查看需联网，这是唯一的非自包含点）。
 
-**导出 PDF**：走 `window.print()`，预览 DOM 里已渲染的 SVG/公式直接进 PDF。打印强制浅色背景，
-故 `exportPdf` 先判断：深色主题且有图表时，临时按浅色 `md.render` + `runMermaid` 重渲染再打印，
+**导出 PDF**：使用 WebView 的打印渲染，预览 DOM 里已渲染的 SVG/公式直接进 PDF。打印强制浅色背景，
+深色主题下，`exportPdf` 临时按浅色重渲染 Mermaid 图表再打印，
 打印后还原。
 
 ### 4.22 统一设置面板（v0.3.3）

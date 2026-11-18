@@ -2,6 +2,8 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
+#[cfg(windows)]
+mod pdf;
 mod repository;
 mod updates;
 
@@ -96,6 +98,18 @@ fn fix_webview_paint(app: tauri::AppHandle) {
     }
 }
 
+#[tauri::command]
+async fn export_pdf(window: tauri::WebviewWindow, path: String, title: String) -> Result<(), String> {
+    #[cfg(windows)]
+    return pdf::export(window, Path::new(&path), title).await;
+
+    #[cfg(not(windows))]
+    {
+        let _ = (window, path, title);
+        Err("当前平台不支持直接保存 PDF".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -117,6 +131,7 @@ pub fn run() {
             read_file,
             write_file,
             write_bytes,
+            export_pdf,
             copy_file,
             initial_file,
             repository::repository_entries,
