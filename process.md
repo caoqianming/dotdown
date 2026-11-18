@@ -16,7 +16,12 @@
 
 ## 2026-11-18
 
-- Windows 导出 PDF 改为直接选路径保存。清除 WebView2 页脚中的内部地址，保留日期、标题和页码。
+### 已发布：v0.7.1（GitHub + Gitee，修复 Windows PDF 页脚）
+
+- Windows 导出 PDF 可直接选路径，按 A4 版式保存。页眉显示日期和标题，页脚只显示页码。
+- 9 项前端测试和 6 项 Rust 测试通过。实际导出的 5 页 A4 样稿均已移除内部地址。
+- 源码及 `v0.7.1` 标签已同步。两端均将此版本列为最新版，公开下载的 Windows x64 安装包和免安装版均通过 SHA-256 校验。
+  [GitHub](https://github.com/caoqianming/dotdown/releases/tag/v0.7.1) · [Gitee](https://gitee.com/caoqianming/dotdown/releases/tag/v0.7.1)
 
 ## 2026-11-12
 
